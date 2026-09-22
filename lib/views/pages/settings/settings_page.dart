@@ -11,9 +11,9 @@ import 'package:miru_app/router/router.dart';
 import 'package:miru_app/utils/log.dart';
 import 'package:miru_app/utils/request.dart';
 import 'package:miru_app/views/dialogs/bt_dialog.dart';
-import 'package:miru_app/controllers/extension/extension_repo_controller.dart';
 import 'package:miru_app/controllers/settings_controller.dart';
-import 'package:miru_app/views/pages/tracking/anilist_tracking_page.dart';
+import 'package:miru_app/utils/extension.dart';
+import 'package:miru_app/views/pages/extension_login_page.dart';
 import 'package:miru_app/views/widgets/settings/settings_expander_tile.dart';
 import 'package:miru_app/views/widgets/settings/settings_input_tile.dart';
 import 'package:miru_app/views/widgets/settings/settings_radios_tile.dart';
@@ -159,35 +159,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 MiruStorage.setSetting(SettingKey.enableNSFW, value);
               },
             ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 10),
-      // 扩展仓库
-      SettingsExpanderTile(
-        icon: fluent.FluentIcons.repo,
-        androidIcon: Icons.extension,
-        title: 'settings.extension'.i18n,
-        subTitle: 'settings.extension-subtitle'.i18n,
-        content: Column(
-          children: [
-            SettingsIntpuTile(
-              title: 'settings.repo-url'.i18n,
-              buildSubtitle: () {
-                if (!Platform.isAndroid) {
-                  return 'settings.repo-url-subtitle'.i18n;
-                }
-                return MiruStorage.getSetting(SettingKey.miruRepoUrl);
-              },
-              onChanged: (value) {
-                MiruStorage.setSetting(SettingKey.miruRepoUrl, value);
-                Get.find<ExtensionRepoPageController>().onRefresh();
-              },
-              buildText: () {
-                return MiruStorage.getSetting(SettingKey.miruRepoUrl);
-              },
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -377,39 +348,23 @@ class _SettingsPageState extends State<SettingsPage> {
         androidIcon: Icons.sync,
         content: Column(
           children: [
-            SettingsSwitchTile(
-              title: 'settings.auto-tracking'.i18n,
-              buildSubtitle: () => 'settings.auto-tracking-subtitle'.i18n,
-              buildValue: () {
-                return MiruStorage.getSetting(SettingKey.autoTracking);
-              },
-              onChanged: (value) {
-                MiruStorage.setSetting(SettingKey.autoTracking, value);
-              },
-            ),
-            const SizedBox(height: 10),
-            SettingsTile(
-              isCard: true,
-              icon: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  image: const DecorationImage(
-                    image: AssetImage('assets/icon/anilist.jpg'),
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                ),
+            for (final runtime in ExtensionUtils.runtimes.values
+                .where((runtime) => runtime.supportsLogin))
+              SettingsTile(
+                isCard: true,
+                icon: const Icon(Icons.login),
+                title: '${runtime.extension.name} 登录',
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  if (Platform.isAndroid) {
+                    Get.to(() => ExtensionLoginPage(runtime: runtime));
+                  } else {
+                    router
+                        .push('/extension_login/${runtime.extension.package}');
+                  }
+                },
               ),
-              title: 'Anilist',
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                if (!Platform.isAndroid) {
-                  router.push('/settings/anilist');
-                } else {
-                  Get.to(() => const AniListTrackingPage());
-                }
-              },
-            ),
+            const SizedBox(height: 10),
           ],
         ),
         title: 'settings.tracking'.i18n,
@@ -476,6 +431,90 @@ class _SettingsPageState extends State<SettingsPage> {
         androidIcon: Icons.network_wifi,
       ),
       const SizedBox(height: 10),
+      SettingsExpanderTile(
+        title: 'AI 配置',
+        subTitle: '配置用于插件开发助手的 OpenAI-compatible 服务',
+        icon: fluent.FluentIcons.robot,
+        androidIcon: Icons.smart_toy,
+        content: Column(
+          children: [
+            SettingsIntpuTile(
+              title: 'API 地址',
+              buildSubtitle: () => '例如 https://api.openai.com/v1',
+              buildText: () => MiruStorage.getSetting(SettingKey.aiBaseUrl),
+              onChanged: (value) =>
+                  MiruStorage.setSetting(SettingKey.aiBaseUrl, value),
+            ),
+            SettingsIntpuTile(
+              title: 'API Key',
+              buildSubtitle: () => '密钥仅保存在本机设置中',
+              buildText: () => MiruStorage.getSetting(SettingKey.aiApiKey),
+              obscureText: true,
+              onChanged: (value) =>
+                  MiruStorage.setSetting(SettingKey.aiApiKey, value),
+            ),
+            SettingsIntpuTile(
+              title: '可用模型',
+              buildSubtitle: () => '用逗号分隔，例如 gpt-4o-mini,claude-3-5-sonnet',
+              buildText: () => MiruStorage.getSetting(SettingKey.aiModels),
+              onChanged: (value) async {
+                final models = value
+                    .split(',')
+                    .map((e) => e.trim())
+                    .where((e) => e.isNotEmpty)
+                    .toList();
+                await MiruStorage.setSetting(SettingKey.aiModels, value);
+                final selected = MiruStorage.getSetting(SettingKey.aiModel);
+                if (!models.contains(selected) && models.isNotEmpty) {
+                  await MiruStorage.setSetting(
+                      SettingKey.aiModel, models.first);
+                }
+                if (mounted) setState(() {});
+              },
+            ),
+            SettingsTile(
+              title: '当前模型',
+              buildSubtitle: () => MiruStorage.getSetting(SettingKey.aiModel),
+              trailing: (() {
+                final models =
+                    (MiruStorage.getSetting(SettingKey.aiModels) as String)
+                        .split(',')
+                        .map((e) => e.trim())
+                        .where((e) => e.isNotEmpty)
+                        .toList();
+                if (models.isEmpty) return const Text('请先填写可用模型');
+                return DropdownButton<String>(
+                  value: (() {
+                    final models =
+                        (MiruStorage.getSetting(SettingKey.aiModels) as String)
+                            .split(',')
+                            .map((e) => e.trim())
+                            .where((e) => e.isNotEmpty)
+                            .toList();
+                    final current =
+                        MiruStorage.getSetting(SettingKey.aiModel) as String;
+                    return models.contains(current) ? current : null;
+                  })(),
+                  hint: const Text('选择模型'),
+                  items: (MiruStorage.getSetting(SettingKey.aiModels) as String)
+                      .split(',')
+                      .map((e) => e.trim())
+                      .where((e) => e.isNotEmpty)
+                      .map((model) =>
+                          DropdownMenuItem(value: model, child: Text(model)))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    MiruStorage.setSetting(SettingKey.aiModel, value);
+                    setState(() {});
+                  },
+                );
+              })(),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
       // Debug
       SettingsExpanderTile(
         title: "settings.log".i18n,
@@ -524,27 +563,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
-      if (!Platform.isAndroid) ...[
-        const SizedBox(height: 10),
-        Obx(
-          () {
-            final value = c.extensionLogWindowId.value != -1;
-            return SettingsSwitchTile(
-              icon: const Icon(
-                fluent.FluentIcons.bug,
-                size: 24,
-              ),
-              title: 'settings.extension-log'.i18n,
-              buildSubtitle: () => 'settings.extension-log-subtitle'.i18n,
-              buildValue: () => value,
-              onChanged: (value) {
-                c.toggleExtensionLogWindow(value);
-              },
-              isCard: true,
-            );
-          },
-        )
-      ],
       // 关于
       const SizedBox(height: 20),
       ListTitle(title: 'settings.about'.i18n),

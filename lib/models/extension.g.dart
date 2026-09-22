@@ -40,13 +40,14 @@ const _$ExtensionTypeEnumMap = {
   ExtensionType.manga: 'manga',
   ExtensionType.bangumi: 'bangumi',
   ExtensionType.fikushon: 'fikushon',
+  ExtensionType.music: 'music',
 };
 
 ExtensionFilter _$ExtensionFilterFromJson(Map<String, dynamic> json) =>
     ExtensionFilter(
       title: json['title'] as String,
-      min: json['min'] as int,
-      max: json['max'] as int,
+      min: (json['min'] as num).toInt(),
+      max: (json['max'] as num).toInt(),
       defaultOption: json['default'] as String,
       options: Map<String, String>.from(json['options'] as Map),
     );
@@ -235,7 +236,7 @@ ExtensionNetworkLog _$ExtensionNetworkLogFromJson(Map<String, dynamic> json) =>
       extension: Extension.fromJson(json['extension'] as Map<String, dynamic>),
       url: json['url'] as String,
       method: json['method'] as String,
-      statusCode: json['statusCode'] as int?,
+      statusCode: (json['statusCode'] as num?)?.toInt(),
       responseBody: json['responseBody'] as String?,
       requestBody: json['requestBody'] as String?,
       requestHeaders: json['requestHeaders'] as Map<String, dynamic>?,

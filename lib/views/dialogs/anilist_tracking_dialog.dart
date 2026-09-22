@@ -403,7 +403,7 @@ class _AnilistTrackingDialogState extends State<AnilistTrackingDialog> {
               startDate: startDate,
             );
           } catch (e) {
-            if (mounted) {
+            if (context.mounted) {
               showPlatformSnackbar(
                 context: context,
                 content: e.toString(),
@@ -412,7 +412,7 @@ class _AnilistTrackingDialogState extends State<AnilistTrackingDialog> {
               return;
             }
           }
-          if (mounted) {
+          if (context.mounted) {
             Navigator.of(context).pop();
           }
         },

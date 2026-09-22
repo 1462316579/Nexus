@@ -14,6 +14,7 @@ class SettingsIntpuTile extends fluent.StatefulWidget {
     required this.buildSubtitle,
     this.trailing = const Icon(Icons.chevron_right),
     this.isCard = false,
+    this.obscureText = false,
   });
   final Widget? icon;
   final String title;
@@ -22,6 +23,7 @@ class SettingsIntpuTile extends fluent.StatefulWidget {
   final Widget trailing;
   final Function(String) onChanged;
   final bool isCard;
+  final bool obscureText;
 
   @override
   fluent.State<SettingsIntpuTile> createState() => _SettingsIntpuTileState();
@@ -56,6 +58,7 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
               title: Text(widget.title),
               content: TextField(
                 controller: _controller,
+                obscureText: widget.obscureText,
                 onChanged: (value) {
                   widget.onChanged(value);
                   setState(() {});
@@ -85,6 +88,7 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
       trailing: Expanded(
           child: fluent.TextBox(
         controller: _controller,
+        obscureText: widget.obscureText,
         onChanged: (value) {
           widget.onChanged(value);
         },

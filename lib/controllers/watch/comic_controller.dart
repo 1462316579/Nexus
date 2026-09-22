@@ -1,7 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:miru_app/data/providers/anilist_provider.dart';
 import 'package:miru_app/models/index.dart';
 import 'package:miru_app/controllers/watch/reader_controller.dart';
 import 'package:miru_app/data/services/database_service.dart';
@@ -91,29 +90,37 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     super.onInit();
   }
 
-  onKey(RawKeyEvent event) {
+  onKey(KeyEvent event) {
     // 按下 ctrl
-    isZoom.value = event.isControlPressed;
+    isZoom.value = HardwareKeyboard.instance.isControlPressed;
     // 上下
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowUp)) {
+    if (HardwareKeyboard.instance.isLogicalKeyPressed(
+      LogicalKeyboardKey.arrowUp,
+    )) {
       if (readType.value == MangaReadMode.webTonn) {
         return previousPage();
       }
     }
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowDown)) {
+    if (HardwareKeyboard.instance.isLogicalKeyPressed(
+      LogicalKeyboardKey.arrowDown,
+    )) {
       if (readType.value == MangaReadMode.webTonn) {
         return nextPage();
       }
     }
 
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowLeft)) {
+    if (HardwareKeyboard.instance.isLogicalKeyPressed(
+      LogicalKeyboardKey.arrowLeft,
+    )) {
       if (readType.value == MangaReadMode.rightToLeft) {
         return nextPage();
       }
       previousPage();
     }
 
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowRight)) {
+    if (HardwareKeyboard.instance.isLogicalKeyPressed(
+      LogicalKeyboardKey.arrowRight,
+    )) {
       if (readType.value == MangaReadMode.rightToLeft) {
         return previousPage();
       }
@@ -187,13 +194,6 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
       super.addHistory(
         currentPage.value.toString(),
         pages.toString(),
-      );
-    }
-    if (MiruStorage.getSetting(SettingKey.autoTracking) && anilistID != "") {
-      AniListProvider.editList(
-        status: AnilistMediaListStatus.current,
-        progress: playIndex + 1,
-        mediaId: anilistID,
       );
     }
     super.onClose();

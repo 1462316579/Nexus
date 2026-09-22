@@ -95,13 +95,10 @@ class _VideoPlayerDesktopControlsState
                       color: _c.subtitleFontColor.value,
                       fontWeight: _c.subtitleFontWeight.value,
                       backgroundColor:
-                          _c.subtitleBackgroundColor.value.withOpacity(
-                        _c.subtitleBackgroundOpacity.value,
+                          _c.subtitleBackgroundColor.value.withValues(
+                        alpha: _c.subtitleBackgroundOpacity.value,
                       ),
                     );
-                    _subtitleViewKey.currentState?.textAlign =
-                        _c.subtitleTextAlign.value;
-                    _subtitleViewKey.currentState?.style = textStyle;
                     _subtitleViewKey.currentState?.padding =
                         EdgeInsets.fromLTRB(
                       16.0,
@@ -303,7 +300,7 @@ class _HeaderState extends State<_Header> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Row(
@@ -379,7 +376,7 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Column(

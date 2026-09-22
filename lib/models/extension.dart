@@ -2,7 +2,7 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'extension.g.dart';
 
-enum ExtensionType { manga, bangumi, fikushon }
+enum ExtensionType { manga, bangumi, fikushon, music }
 
 enum ExtensionWatchBangumiType { hls, mp4, torrent }
 

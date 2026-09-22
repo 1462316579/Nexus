@@ -14,7 +14,6 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:miru_app/data/providers/anilist_provider.dart';
 import 'package:miru_app/data/providers/bt_server_provider.dart';
 import 'package:miru_app/models/index.dart';
 import 'package:miru_app/utils/log.dart';
@@ -223,7 +222,7 @@ class VideoPlayerController extends GetxController {
     ever(subtitleFontColor, (callback) {
       MiruStorage.setSetting(
         SettingKey.subtitleFontColor,
-        callback.value,
+        callback.toARGB32(),
       );
     });
     ever(subtitleFontWeight, (callback) {
@@ -235,7 +234,7 @@ class VideoPlayerController extends GetxController {
     ever(subtitleBackgroundColor, (callback) {
       MiruStorage.setSetting(
         SettingKey.subtitleBackgroundColor,
-        callback.value,
+        callback.toARGB32(),
       );
     });
     ever(subtitleBackgroundOpacity, (callback) {
@@ -805,13 +804,6 @@ class VideoPlayerController extends GetxController {
 
   @override
   void onClose() async {
-    if (MiruStorage.getSetting(SettingKey.autoTracking) && anilistID != "") {
-      AniListProvider.editList(
-        status: AnilistMediaListStatus.current,
-        progress: playIndex + 1,
-        mediaId: anilistID,
-      );
-    }
     if (Platform.isAndroid) {
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.edgeToEdge,

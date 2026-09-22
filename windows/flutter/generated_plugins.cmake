@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_multi_window
+  flutter_inappwebview_windows
   flutter_js
   flutter_windows_webview
   isar_flutter_libs
@@ -17,7 +18,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
-  media_kit_native_event_loop
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

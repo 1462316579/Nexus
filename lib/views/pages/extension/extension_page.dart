@@ -25,6 +25,7 @@ class ExtensionPage extends StatefulWidget {
 
 class _ExtensionPageState extends State<ExtensionPage> {
   late ExtensionPageController c;
+  final _addMenuController = fluent.FlyoutController();
 
   @override
   void initState() {
@@ -42,8 +43,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
     super.dispose();
   }
 
-  // 导入扩展对话框
-  _importDialog() {
+  void _importByUrl() {
     String url = '';
     showPlatformDialog(
       context: context,
@@ -118,26 +118,94 @@ class _ExtensionPageState extends State<ExtensionPage> {
           },
           child: Text('extension.import.import-by-url'.i18n),
         ),
-        PlatformFilledButton(
-          child: Text('extension.import.import-by-local'.i18n),
-          onPressed: () async {
-            FilePickerResult? result = await FilePicker.platform.pickFiles(
-              type: FileType.custom,
-              allowedExtensions: ['js'],
-            );
-            if (result == null || !mounted) {
-              return;
-            }
-            final path = result.files.single.path;
-            if (path == null) {
-              return;
-            }
-            final script = File(path).readAsStringSync();
-            await ExtensionUtils.installByScript(script, context);
-            RouterUtils.pop();
-          },
-        ),
       ],
+    );
+  }
+
+  Future<void> _importByLocal() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['js'],
+    );
+    if (result == null || !mounted) return;
+    final path = result.files.single.path;
+    if (path == null) return;
+    final script = File(path).readAsStringSync();
+    await ExtensionUtils.installByScript(script, context);
+  }
+
+  void _showAddMenu() {
+    if (Platform.isAndroid) {
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_note),
+                title: const Text('新建插件'),
+                onTap: () {
+                  Navigator.pop(context);
+                  router.push('/music/new-plugin');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.link),
+                title: Text('extension.import.import-by-url'.i18n),
+                onTap: () {
+                  Navigator.pop(context);
+                  _importByUrl();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text('本地导入'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _importByLocal();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    _addMenuController.showFlyout(
+      autoModeConfiguration: fluent.FlyoutAutoConfiguration(
+        preferredMode: fluent.FlyoutPlacementMode.bottomRight,
+      ),
+      builder: (context) => fluent.MenuFlyout(
+        items: [
+          fluent.MenuFlyoutItem(
+            leading: const Icon(fluent.FluentIcons.edit),
+            text: const Text('新建插件'),
+            onPressed: () {
+              fluent.Flyout.of(context).close();
+              router.push('/music/new-plugin');
+            },
+          ),
+          fluent.MenuFlyoutItem(
+            leading: const Icon(fluent.FluentIcons.link),
+            text: Text('extension.import.import-by-url'.i18n),
+            onPressed: () {
+              fluent.Flyout.of(context).close();
+              _importByUrl();
+            },
+          ),
+          fluent.MenuFlyoutItem(
+            leading: const Icon(fluent.FluentIcons.fabric_folder),
+            text: const Text('本地导入'),
+            onPressed: () {
+              fluent.Flyout.of(context).close();
+              _importByLocal();
+            },
+          ),
+        ],
+      ),
+      barrierDismissible: true,
+      dismissWithEsc: true,
     );
   }
 
@@ -195,7 +263,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 onPressed: () => _loadErrorDialog(),
               ),
             IconButton(
-              onPressed: () => _importDialog(),
+              onPressed: _showAddMenu,
               icon: const Icon(Icons.add),
             ),
             IconButton(
@@ -251,12 +319,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
                       _loadErrorDialog();
                     },
                   ),
-                // 导入按钮
-                fluent.IconButton(
-                  icon: const Icon(fluent.FluentIcons.add_space_before),
-                  onPressed: () {
-                    _importDialog();
-                  },
+                fluent.FlyoutTarget(
+                  controller: _addMenuController,
+                  child: fluent.IconButton(
+                    icon: const Icon(fluent.FluentIcons.add),
+                    onPressed: _showAddMenu,
+                  ),
                 ),
               ],
             ),

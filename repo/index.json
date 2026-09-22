@@ -1,0 +1,15 @@
+[
+ {
+  "author": "hualiong",
+  "icon": "https://yzzy.tv/favicon.ico",
+  "lang": "zh-cn",
+  "license": "MIT",
+  "name": "优质资源库",
+  "nsfw": "false",
+  "package": "yzzy.tv",
+  "type": "bangumi",
+  "url": "yzzy.tv.js",
+  "version": "v0.0.2",
+  "webSite": "https://yzzy.tv"
+ }
+]

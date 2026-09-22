@@ -108,6 +108,14 @@ install(CODE "
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
+# flutter_js uses this library through Dart FFI on Linux. The plugin's
+# generated bundled-library variable is mismatched, so install it explicitly.
+set(FLUTTER_JS_QUICKJS_LIBRARY
+  "${FLUTTER_MANAGED_DIR}/ephemeral/.plugin_symlinks/flutter_js/linux/shared/libquickjs_c_bridge_plugin.so"
+)
+install(FILES "${FLUTTER_JS_QUICKJS_LIBRARY}"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 

@@ -10,9 +10,15 @@ import 'package:miru_app/views/pages/detail_page.dart';
 import 'package:miru_app/views/pages/extension/extension_page.dart';
 import 'package:miru_app/views/pages/extension/extension_repo_page.dart';
 import 'package:miru_app/views/pages/extension/extension_settings_page.dart';
+import 'package:miru_app/views/pages/extension_login_page.dart';
+import 'package:miru_app/utils/extension.dart';
 import 'package:miru_app/views/pages/favorites_page.dart';
-import 'package:miru_app/views/pages/home_page.dart';
 import 'package:miru_app/views/pages/main_page.dart';
+import 'package:miru_app/views/pages/content_module_page.dart';
+import 'package:miru_app/views/pages/code_edit_page.dart';
+import 'package:miru_app/views/pages/library_page.dart';
+import 'package:miru_app/views/pages/music_page.dart';
+import 'package:miru_app/views/pages/music_plugin_editor_page.dart';
 import 'package:miru_app/views/pages/search/extension_searcher_page.dart';
 import 'package:miru_app/views/pages/search/search_page.dart';
 import 'package:miru_app/views/pages/settings/settings_page.dart';
@@ -44,7 +50,24 @@ final router = GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => _animation(const HomePage()),
+          builder: (context, state) => _animation(const ContentModulePage(
+            type: ExtensionType.bangumi,
+            title: '影视',
+          )),
+        ),
+        GoRoute(
+          path: '/manga',
+          builder: (context, state) => _animation(const ContentModulePage(
+            type: ExtensionType.manga,
+            title: '漫画',
+          )),
+        ),
+        GoRoute(
+          path: '/novel',
+          builder: (context, state) => _animation(const ContentModulePage(
+            type: ExtensionType.fikushon,
+            title: '小说',
+          )),
         ),
         GoRoute(
           path: '/favorites',
@@ -82,6 +105,14 @@ final router = GoRouter(
           ),
         ),
         GoRoute(
+          path: '/extension_login/:package',
+          builder: (context, state) {
+            final runtime = ExtensionUtils.runtimes[state.pathParameters['package']!];
+            if (runtime == null) return const SizedBox.shrink();
+            return _animation(ExtensionLoginPage(runtime: runtime));
+          },
+        ),
+        GoRoute(
           path: '/settings',
           builder: (context, state) => _animation(const SettingsPage()),
         ),
@@ -102,6 +133,31 @@ final router = GoRouter(
         GoRoute(
           path: '/extension_repo',
           builder: (context, state) => _animation(const ExtensionRepoPage()),
+        ),
+        GoRoute(
+          path: '/music',
+          builder: (context, state) => _animation(const MusicPage()),
+        ),
+        GoRoute(
+          path: '/library/favorites',
+          builder: (context, state) => _animation(const LibraryPage(history: false)),
+        ),
+        GoRoute(
+          path: '/library/history',
+          builder: (context, state) => _animation(const LibraryPage(history: true)),
+        ),
+        GoRoute(
+          path: '/extension_code',
+          builder: (context, state) {
+            final package = state.uri.queryParameters['package']!;
+            final extension = ExtensionUtils.runtimes[package]?.extension;
+            if (extension == null) return const SizedBox.shrink();
+            return _animation(CodeEditPage(extension: extension));
+          },
+        ),
+        GoRoute(
+          path: '/music/new-plugin',
+          builder: (context, state) => _animation(const MusicPluginEditorPage()),
         ),
         GoRoute(
           path: '/detail',

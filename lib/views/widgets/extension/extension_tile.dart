@@ -9,8 +9,6 @@ import 'package:miru_app/utils/extension.dart';
 import 'package:miru_app/utils/i18n.dart';
 import 'package:miru_app/views/widgets/cache_network_image.dart';
 import 'package:miru_app/views/widgets/platform_widget.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:path/path.dart' as path;
 
 class ExtensionTile extends StatefulWidget {
   const ExtensionTile(this.extension, {super.key});
@@ -162,11 +160,14 @@ class _ExtensionTileState extends State<ExtensionTile> {
                         fluent.MenuFlyoutItem(
                           leading: const Icon(fluent.FluentIcons.code),
                           text: Text('extension.edit-code'.i18n),
-                          onPressed: () async {
+                          onPressed: () {
                             fluent.Flyout.of(context).close();
-                            launchUrl(path.toUri(
-                              '${ExtensionUtils.extensionsDir}/${widget.extension.package}.js',
-                            ));
+                            router.push(Uri(
+                              path: '/extension_code',
+                              queryParameters: {
+                                'package': widget.extension.package,
+                              },
+                            ).toString());
                           },
                         ),
                         fluent.MenuFlyoutItem(

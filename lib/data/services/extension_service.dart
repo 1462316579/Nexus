@@ -22,6 +22,7 @@ import 'package:flutter_js/javascriptcore/jscore_runtime.dart';
 
 class ExtensionService {
   late JavascriptRuntime runtime;
+  bool supportsLogin = false;
   late Extension extension;
   String _cuurentRequestUrl = '';
   String evalString = '';
@@ -46,10 +47,8 @@ class ExtensionService {
     // 初始化runtime
     if (Platform.isAndroid) {
       runtime = QuickJsRuntime2(stackSize: 1024 * 1024);
-    } else if (Platform.isWindows) {
+    } else if (Platform.isWindows || Platform.isLinux) {
       runtime = QuickJsRuntime2();
-    } else if (Platform.isLinux) {
-      runtime = JavascriptCoreRuntime();
     } else {
       runtime = JavascriptCoreRuntime();
     }
@@ -277,6 +276,7 @@ class ExtensionService {
     }
     // 初始化运行扩展
     await _initRunExtension(content);
+    supportsLogin = await _isLoginSupported();
     return this;
   }
 
@@ -428,6 +428,11 @@ class Extension {
     this.settingKeys.push(settings.key);
     return await handlePromise("registerSetting$className",JSON.stringify([settings]));
   }
+  login() { return null; }
+  loginForm() { return []; }
+  sendVerificationCode(field, values) { throw new Error("verification code is not supported"); }
+  submitLogin(values) { throw new Error("not implement submitLogin"); }
+  isLoginSupported() { return false; }
   async load() {}
 }
 async function handlePromise(channelName,message){
@@ -595,6 +600,21 @@ async function stringify(callback) {
             watch(url) {
               throw new Error("not implement watch");
             }
+            musicSearch(keyword, page, filter) {
+              throw new Error("not implement musicSearch");
+            }
+            musicFilters(filter) {
+              throw new Error("not implement musicFilters");
+            }
+            musicDetail(url) {
+              throw new Error("not implement musicDetail");
+            }
+            musicPlay(url) {
+              throw new Error("not implement musicPlay");
+            }
+            musicLyrics(url) {
+              throw new Error("not implement musicLyrics");
+            }
             checkUpdate(url) {
               throw new Error("not implement checkUpdate");
             }
@@ -607,6 +627,21 @@ async function stringify(callback) {
               return sendMessage("registerSetting", JSON.stringify([settings]));
             }
             async load() {}
+            login() {
+              return null;
+            }
+            loginForm() {
+              return [];
+            }
+            sendVerificationCode(field, values) {
+              throw new Error("verification code is not supported");
+            }
+            submitLogin(values) {
+              throw new Error("not implement submitLogin");
+            }
+            isLoginSupported() {
+              return false;
+            }
           }
 
           async function stringify(callback) {
@@ -771,10 +806,137 @@ async function stringify(callback) {
           final result = ExtensionMangaWatch.fromJson(data);
           result.headers ??= await _defaultHeaders;
           return result;
-        default:
+        case ExtensionType.fikushon:
           return ExtensionFikushonWatch.fromJson(data);
+        case ExtensionType.music:
+          throw StateError(
+              'Music extensions use musicStream() instead of watch()');
       }
     });
+  }
+
+  Future<bool> _isLoginSupported() async {
+    try {
+      final result = await _evaluateMusic('isLoginSupported', []);
+      return jsonDecode(result.stringResult) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String?> login() async {
+    return runExtension(() async {
+      final result = await _evaluateMusic('login', []);
+      final data = jsonDecode(result.stringResult);
+      if (data == null) return null;
+      if (data is String) return data;
+      final config = Map<String, dynamic>.from(data as Map);
+      if (config['mode'] != null && config['mode'] != 'webview') {
+        throw FormatException('Unsupported login mode: ${config['mode']}');
+      }
+      return config['url'] as String?;
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> loginForm() async {
+    return runExtension(() async {
+      final result = await _evaluateMusic('loginForm', []);
+      final data = jsonDecode(result.stringResult);
+      if (data == null) {
+        return <Map<String, dynamic>>[];
+      }
+      if (data is! List) {
+        throw const FormatException('loginForm must return a list');
+      }
+      return data
+          .map((field) => Map<String, dynamic>.from(field as Map))
+          .toList();
+    });
+  }
+
+  Future<String> sendLoginVerificationCode(
+    String field,
+    Map<String, String> values,
+  ) async {
+    final result =
+        await _evaluateMusic('sendVerificationCode', [field, values]);
+    return jsonDecode(result.stringResult)?.toString() ?? '验证码已发送';
+  }
+
+  Future<bool> submitLogin(Map<String, String> values) async {
+    final result = await _evaluateMusic('submitLogin', [values]);
+    return jsonDecode(result.stringResult) == true;
+  }
+
+  Future<MusicSearchResult> musicSearch(
+    String keyword,
+    int page, {
+    Map<String, List<String>>? filter,
+  }) async {
+    return runExtension(() async {
+      final result = await _evaluateMusic(
+        'musicSearch',
+        [keyword, page, filter],
+      );
+      return MusicSearchResult.fromJson(jsonDecode(result.stringResult));
+    });
+  }
+
+  Future<Map<String, MusicFilter>> musicFilters({
+    Map<String, List<String>>? filter,
+  }) async {
+    return runExtension(() async {
+      final result = await _evaluateMusic('musicFilters', [filter]);
+      final data =
+          Map<String, dynamic>.from(jsonDecode(result.stringResult) as Map);
+      return data.map(
+        (key, value) => MapEntry(
+          key,
+          MusicFilter.fromJson(Map<String, dynamic>.from(value as Map)),
+        ),
+      );
+    });
+  }
+
+  Future<MusicDetail> musicDetail(String url) async {
+    return runExtension(() async {
+      final result = await _evaluateMusic('musicDetail', [url]);
+      return MusicDetail.fromJson(jsonDecode(result.stringResult));
+    });
+  }
+
+  Future<MusicStream> musicStream(String url) async {
+    return runExtension(() async {
+      final result = await _evaluateMusic('musicPlay', [url]);
+      final data = jsonDecode(result.stringResult);
+      if (data is String) return MusicStream(url: data);
+      return MusicStream.fromJson(Map<String, dynamic>.from(data as Map));
+    });
+  }
+
+  Future<String> musicLyrics(String url) async {
+    return runExtension(() async {
+      final result = await _evaluateMusic('musicLyrics', [url]);
+      final data = jsonDecode(result.stringResult);
+      return data is String ? data : (data['lyrics'] as String? ?? '');
+    });
+  }
+
+  Future<dynamic> _evaluateMusic(String method, List<dynamic> args) async {
+    final encodedArgs = jsonEncode(args);
+    final expression = Platform.isLinux
+        ? '${className}Instance.$method(...JSON.parse(\'${encodedArgs.replaceAll("'", "\\'")}\'))'
+        : 'stringify(() => ${className}Instance.$method(...JSON.parse(\'${encodedArgs.replaceAll("'", "\\'")}\')))';
+    return runtime.handlePromise(await runtime.evaluateAsync(expression));
+  }
+
+  Future<String> debugExecute(String method) async {
+    final expression =
+        'stringify(() => ${className}Instance[${jsonEncode(method)}]())';
+    final result = await runtime.handlePromise(
+      await runtime.evaluateAsync(expression),
+    );
+    return result.stringResult;
   }
 
   Future<String> checkUpdate(url) async {

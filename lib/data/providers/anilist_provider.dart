@@ -125,7 +125,9 @@ class AniListProvider {
                 .toLowerCase()
                 .contains("invalid token")) {
           Get.put(TrackingPageController()).anilistIsLogin.value = false;
-          // ignore: use_build_context_synchronously
+          if (!currentContext.mounted) {
+            rethrow;
+          }
           showPlatformSnackbar(
             context: currentContext,
             content: "Anilist not login",

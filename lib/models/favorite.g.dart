@@ -163,11 +163,13 @@ const _FavoritetypeEnumValueMap = {
   r'manga': r'manga',
   r'bangumi': r'bangumi',
   r'fikushon': r'fikushon',
+  r'music': r'music',
 };
 const _FavoritetypeValueEnumMap = {
   r'manga': ExtensionType.manga,
   r'bangumi': ExtensionType.bangumi,
   r'fikushon': ExtensionType.fikushon,
+  r'music': ExtensionType.music,
 };
 
 Id _favoriteGetId(Favorite object) {

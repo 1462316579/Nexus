@@ -34,8 +34,8 @@ class _DetailBackgroundColorState extends State<DetailBackgroundColor> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            FluentTheme.of(context).micaBackgroundColor.withOpacity(
-                  scrollOffset / 255,
+            FluentTheme.of(context).micaBackgroundColor.withValues(
+                  alpha: scrollOffset / 255,
                 ),
             FluentTheme.of(context).micaBackgroundColor,
           ],

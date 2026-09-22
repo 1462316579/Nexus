@@ -95,7 +95,9 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _data.addAll(data);
       _page++;
     } catch (e) {
-      // ignore: use_build_context_synchronously
+      if (!mounted) {
+        rethrow;
+      }
       showPlatformSnackbar(
         context: context,
         content: e.toString(),

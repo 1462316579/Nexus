@@ -17,7 +17,7 @@ dependencies:
   flutter_animate: ^4.1.1+1
   flutter_code_editor: ^0.3.0
   flutter_highlight: ^0.7.0
-  flutter_i18n: ^0.35.0
+  flutter_i18n: ^0.36.3
   flutter_js: ^0.8.0
   flutter_markdown: ^0.6.17+1
   get: ^4.6.5
@@ -31,7 +31,7 @@ dependencies:
   media_kit: ^1.1.10+1
   media_kit_video: ^1.2.4
   media_kit_libs_video: ^1.0.4
-  package_info_plus: ^5.0.1
+  package_info_plus: ^9.0.1
   palette_generator: ^0.3.3+2
   path: ^1.8.3
   path_provider: ^2.1.0
@@ -64,6 +64,12 @@ dependencies:
   auto_orientation: ^2.3.1
   dlna_dart: ^0.0.8
 
+dependency_overrides:
+  file_picker:
+    path: vendor/plugins/file_picker
+  flutter_inappwebview_windows:
+    path: vendor/plugins/flutter_inappwebview_windows
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -77,5 +83,4 @@ flutter:
   assets:
     - assets/i18n/
     - assets/icon/logo.png
-    - assets/icon/anilist.jpg
     - assets/js/

@@ -1,14 +1,10 @@
-import 'dart:convert';
 import 'dart:io';
-
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:miru_app/models/extension.dart';
 import 'package:miru_app/controllers/extension/extension_controller.dart';
 import 'package:miru_app/controllers/search_controller.dart';
-import 'package:miru_app/controllers/settings_controller.dart';
 import 'package:miru_app/data/services/extension_service.dart';
 import 'package:miru_app/utils/i18n.dart';
 import 'package:miru_app/utils/miru_directory.dart';
@@ -21,6 +17,8 @@ import 'package:path/path.dart' as path;
 class ExtensionUtils {
   static Map<String, ExtensionService> runtimes = {};
   static Map<String, String> extensionErrorMap = {};
+  static final Map<String, List<ExtensionLog>> logs = {};
+  static final Map<String, Map<String, ExtensionNetworkLog>> networkLogs = {};
 
   static String get extensionsDir => path.join(
         MiruDirectory.getDirectory,
@@ -166,62 +164,51 @@ class ExtensionUtils {
         return 'extension-type.novel'.i18n;
       case ExtensionType.manga:
         return 'extension-type.comic'.i18n;
+      case ExtensionType.music:
+        return '音乐';
     }
   }
 
-  static addLog(
+  static void addLog(
     Extension ext,
     ExtensionLogLevel level,
     String logContent,
-  ) async {
-    if (!Get.isRegistered<SettingsController>()) {
-      return;
-    }
-    final windowId = Get.find<SettingsController>().extensionLogWindowId.value;
-    if (windowId == -1) {
-      return;
-    }
-    try {
-      DesktopMultiWindow.invokeMethod(
-        windowId,
-        "addLog",
-        jsonEncode(
-          ExtensionLog(
-            extension: ext,
-            content: logContent,
-            time: DateTime.now(),
-            level: level,
-          ).toJson(),
-        ),
-      );
-    } catch (e) {
-      debugPrint(e.toString());
-    }
+  ) {
+    final entries = logs.putIfAbsent(ext.package, () => <ExtensionLog>[]);
+    entries.add(ExtensionLog(
+      extension: ext,
+      content: logContent,
+      time: DateTime.now(),
+      level: level,
+    ));
+    if (entries.length > 500) entries.removeAt(0);
   }
 
-  static addNetworkLog(
-    String key,
-    ExtensionNetworkLog log,
-  ) {
-    if (!Get.isRegistered<SettingsController>()) {
-      return;
+  static void addNetworkLog(String key, ExtensionNetworkLog log) {
+    final entries = networkLogs.putIfAbsent(
+      log.extension.package,
+      () => <String, ExtensionNetworkLog>{},
+    );
+    entries[key] = log;
+    if (entries.length > 500) entries.remove(entries.keys.first);
+  }
+
+  static Future<String> callPluginMethod(
+    String script,
+    String method,
+    BuildContext context,
+  ) async {
+    if (!RegExp(r'^[A-Za-z_$][A-Za-z0-9_$]*$').hasMatch(method)) {
+      throw const FormatException('Invalid plugin method name');
     }
-    final windowId = Get.find<SettingsController>().extensionLogWindowId.value;
-    if (windowId == -1) {
-      return;
-    }
-    try {
-      DesktopMultiWindow.invokeMethod(
-        windowId,
-        "addNetworkLog",
-        jsonEncode({
-          'key': key,
-          'log': log.toJson(),
-        }),
-      );
-    } catch (e) {
-      debugPrint(e.toString());
-    }
+    final extension = parseExtension(script);
+    await installByScript(script, context);
+    return runtimes[extension.package]!.debugExecute(method);
+  }
+
+  static void clearDebugLogs(String package) {
+    logs.remove(package);
+    networkLogs.remove(package);
   }
 
   // ==MiruExtension==
@@ -246,6 +233,11 @@ class ExtensionUtils {
       result[match.group(1)!] = match.group(2);
     }
     result['nsfw'] = result['nsfw'] == "true";
+    final type = (result['type'] as String? ?? '').trim().toLowerCase();
+    if (!const {'manga', 'bangumi', 'fikushon', 'music'}.contains(type)) {
+      throw FormatException('Unsupported extension type: $type');
+    }
+    result['type'] = type;
     return Extension.fromJson(result);
   }
 }

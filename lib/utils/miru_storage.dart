@@ -106,6 +106,10 @@ class MiruStorage {
   static _initSettings() async {
     await _initSetting(SettingKey.miruRepoUrl, "https://miru-repo.0n0.dev");
     await _initSetting(SettingKey.tmdbKey, "");
+    await _initSetting(SettingKey.aiBaseUrl, 'https://api.openai.com/v1');
+    await _initSetting(SettingKey.aiApiKey, '');
+    await _initSetting(SettingKey.aiModels, 'gpt-4o-mini');
+    await _initSetting(SettingKey.aiModel, 'gpt-4o-mini');
     await _initSetting(SettingKey.autoCheckUpdate, true);
     await _initSetting(SettingKey.language, 'en');
     await _initSetting(SettingKey.novelFontSize, 18.0);
@@ -130,9 +134,10 @@ class MiruStorage {
     await _initSetting(SettingKey.proxyType, 'DIRECT');
     await _initSetting(SettingKey.saveLog, true);
     await _initSetting(SettingKey.subtitleFontSize, 46.0);
-    await _initSetting(SettingKey.subtitleFontColor, Colors.white.value);
+    await _initSetting(SettingKey.subtitleFontColor, Colors.white.toARGB32());
     await _initSetting(SettingKey.subtitleFontWeight, 'bold');
-    await _initSetting(SettingKey.subtitleBackgroundColor, Colors.black.value);
+    await _initSetting(
+        SettingKey.subtitleBackgroundColor, Colors.black.toARGB32());
     await _initSetting(SettingKey.subtitleBackgroundOpacity, 0.5);
     await _initSetting(SettingKey.subtitleTextAlign, TextAlign.center.index);
   }
@@ -171,6 +176,10 @@ class SettingKey {
   static const theme = "Theme";
   static const miruRepoUrl = "MiruRepoUrl";
   static const tmdbKey = 'TMDBKey';
+  static const aiBaseUrl = 'AIBaseUrl';
+  static const aiApiKey = 'AIApiKey';
+  static const aiModels = 'AIModels';
+  static const aiModel = 'AIModel';
   static const autoCheckUpdate = 'AutoCheckUpdate';
   static const language = 'Language';
   static const novelFontSize = 'NovelFontSize';

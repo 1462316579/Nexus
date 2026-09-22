@@ -59,13 +59,25 @@ class _SwitchTileDialogState<T> extends State<SwitchTileDialog<T>> {
                 ),
               ),
               const SizedBox(height: 10),
-              for (final entrie in widget.buildOptions.entries)
-                RadioListTile(
-                  title: Text(entrie.key),
-                  value: entrie.value,
-                  groupValue: widget.value,
-                  onChanged: (value) => _selectOption(entrie.key),
+              RadioGroup<T>(
+                groupValue: widget.value,
+                onChanged: (value) {
+                  if (value != null) {
+                    _selectOption(widget.buildOptions.keys.firstWhere(
+                      (key) => widget.buildOptions[key] == value,
+                    ));
+                  }
+                },
+                child: Column(
+                  children: [
+                    for (final entrie in widget.buildOptions.entries)
+                      RadioListTile<T>(
+                        title: Text(entrie.key),
+                        value: entrie.value,
+                      ),
+                  ],
                 ),
+              ),
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(

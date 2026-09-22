@@ -13,19 +13,21 @@ class SearchPageController extends GetxController {
       searchResultList.where((element) => element.completed).length;
   bool needRefresh = true;
   bool isPageOpen = false;
+  bool _prioritizeResults = true;
   // 是否打开了这个页面
 
   @override
   void onInit() {
     ever(search, (callback) {
       _randomKey = DateTime.now().millisecondsSinceEpoch.toString();
-      getResult(_randomKey);
+      getResult(_randomKey, prioritizeResults: _prioritizeResults);
     });
     super.onInit();
   }
 
-  getRuntime({ExtensionType? type}) {
+  getRuntime({ExtensionType? type, bool prioritizeResults = true}) {
     _randomKey = DateTime.now().millisecondsSinceEpoch.toString();
+    _prioritizeResults = prioritizeResults;
     cuurentExtensionType.value = type;
     final exts = ExtensionUtils.runtimes.values.toList();
     if (type != null) {
@@ -38,11 +40,11 @@ class SearchPageController extends GetxController {
     for (var element in exts) {
       searchResultList.add(SearchResult(runitme: element));
     }
-    getResult(_randomKey);
+    getResult(_randomKey, prioritizeResults: _prioritizeResults);
     needRefresh = false;
   }
 
-  Future<void> getResult(String key) async {
+  Future<void> getResult(String key, {required bool prioritizeResults}) async {
     final futures = <Future>[];
     // 最后一个有结果的搜索结果索引
     var lastResultIndex = -1;
@@ -66,9 +68,9 @@ class SearchPageController extends GetxController {
           }
           element.result = result;
           // 如果搜索结果不为空,
-          if (result.isNotEmpty) {
+          if (prioritizeResults && result.isNotEmpty) {
             searchResultList.remove(element);
-            // 判断是否是第一个,将第一个放到最前面
+            // 将有结果的插件优先显示。
             if (lastResultIndex == -1) {
               searchResultList.insert(0, element);
               lastResultIndex = 0;
@@ -81,11 +83,65 @@ class SearchPageController extends GetxController {
           element.error = e.toString();
         }).whenComplete(() {
           element.completed = true;
+          if (_randomKey == key) searchResultList.refresh();
         }),
       );
     }
 
     await Future.wait(futures);
+  }
+
+  Future<void> loadMore(SearchResult result) async {
+    if (result.loadingMore || result.result == null) return;
+    result.loadingMore = true;
+    searchResultList.refresh();
+    try {
+      final nextPage = result.page + 1;
+      final data = search.value.isEmpty
+          ? await result.runitme.latest(nextPage)
+          : await result.runitme.search(
+              search.value,
+              nextPage,
+              filter: result.selectedFilters,
+            );
+      result.result!.addAll(data);
+      result.page = nextPage;
+    } catch (error) {
+      result.error = error.toString();
+    } finally {
+      result.loadingMore = false;
+      searchResultList.refresh();
+    }
+  }
+
+  Future<void> loadFilters(SearchResult result) async {
+    result.filters = await result.runitme.createFilter(
+      filter: result.selectedFilters.isEmpty ? null : result.selectedFilters,
+    );
+    for (final entry in result.filters!.entries) {
+      result.selectedFilters.putIfAbsent(entry.key, () => [entry.value.defaultOption]);
+    }
+    searchResultList.refresh();
+  }
+
+  Future<void> applyFilters(SearchResult result, Map<String, List<String>> filters) async {
+    result.selectedFilters = filters;
+    result.page = 1;
+    result.loadingMore = true;
+    result.error = null;
+    searchResultList.refresh();
+    try {
+      result.result = await result.runitme.search(
+        search.value,
+        1,
+        filter: filters,
+      );
+    } catch (error) {
+      result.error = error.toString();
+    } finally {
+      result.loadingMore = false;
+      searchResultList.refresh();
+    }
   }
 
   getPackgeByIndex(int index) {

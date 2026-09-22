@@ -18,26 +18,23 @@ class WebViewPage extends StatefulWidget {
 }
 
 class _WebViewPageState extends State<WebViewPage> {
-  late String url = widget.extensionRuntime.extension.webSite + widget.url;
+  late String url = Uri.parse(widget.url).hasScheme
+      ? widget.url
+      : widget.extensionRuntime.extension.webSite + widget.url;
   final cookieManager = WebviewCookieManager();
   late Uri loadUrl = Uri.parse(url);
 
-  _setCookie() async {
-    if (loadUrl.host != Uri.parse(url).host) {
-      return;
-    }
-    final cookies = await cookieManager.getCookies(loadUrl.toString());
-    final cookieString =
-        cookies.map((e) => '${e.name}=${e.value}').toList().join(';');
-    debugPrint('$url $cookieString');
-    widget.extensionRuntime.setCookie(
-      cookieString,
-    );
+  Future<void> _setCookie(String currentUrl) async {
+    final currentUri = Uri.tryParse(currentUrl);
+    if (currentUri == null || currentUri.host != Uri.parse(url).host) return;
+    final cookies = await cookieManager.getCookies(currentUrl);
+    final cookieString = cookies.map((e) => '${e.name}=${e.value}').join(';');
+    await widget.extensionRuntime.setCookie(cookieString);
   }
 
   @override
   void dispose() {
-    _setCookie();
+    _setCookie(loadUrl.toString());
     super.dispose();
   }
 
@@ -55,9 +52,14 @@ class _WebViewPageState extends State<WebViewPage> {
           userAgent: MiruStorage.getUASetting(),
         ),
         onLoadStart: (controller, url) {
+          if (url == null) return;
           setState(() {
-            loadUrl = url!;
+            loadUrl = url;
           });
+          _setCookie(url.toString());
+        },
+        onLoadStop: (controller, url) {
+          if (url != null) _setCookie(url.toString());
         },
       ),
     );

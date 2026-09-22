@@ -107,6 +107,22 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         onChanged: c.changeTab,
         displayMode: fluent.PaneDisplayMode.compact,
         footerItems: [
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.favorite_star),
+            title: const Text('收藏'),
+            body: const SizedBox.shrink(),
+            onTap: () {
+              router.go('/library/favorites');
+            },
+          ),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.history),
+            title: const Text('历史记录'),
+            body: const SizedBox.shrink(),
+            onTap: () {
+              router.go('/library/history');
+            },
+          ),
           fluent.PaneItemSeparator(),
           fluent.PaneItem(
             icon: const Icon(fluent.FluentIcons.repo),
@@ -127,19 +143,35 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         ],
         items: [
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.home),
-            title: Text('common.home'.i18n),
-            body: const HomePage(),
+            icon: const Icon(fluent.FluentIcons.video),
+            title: const Text('影视'),
+            body: const SizedBox.shrink(),
             onTap: () {
               router.go('/');
             },
           ),
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.search),
-            title: Text('common.search'.i18n),
-            body: const SearchPage(),
+            icon: const Icon(fluent.FluentIcons.library),
+            title: const Text('漫画'),
+            body: const SizedBox.shrink(),
             onTap: () {
-              router.go('/search');
+              router.go('/manga');
+            },
+          ),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.reading_mode),
+            title: const Text('小说'),
+            body: const SizedBox.shrink(),
+            onTap: () {
+              router.go('/novel');
+            },
+          ),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.music_note),
+            title: const Text('音乐'),
+            body: const SizedBox.shrink(),
+            onTap: () {
+              router.go('/music');
             },
           ),
           fluent.PaneItem(
@@ -163,6 +195,14 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         "${value.width},${value.height}",
       );
     });
+  }
+
+  @override
+  Future<void> onWindowClose() async {
+    await windowManager.setPreventClose(true);
+    await windowManager.hide();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await windowManager.destroy();
   }
 
   @override

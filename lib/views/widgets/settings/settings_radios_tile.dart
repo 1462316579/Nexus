@@ -42,20 +42,22 @@ class _SettingsRadiosTileState<T> extends State<SettingsRadiosTile<T>> {
           builder: (context) => AlertDialog(
             title: Text(widget.title),
             scrollable: true,
-            content: Column(
-              children: [
-                for (final item in widget.itemNameValue.entries)
-                  RadioListTile<T>(
-                    title: Text(item.key),
-                    value: item.value,
-                    groupValue: widget.buildGroupValue(),
-                    onChanged: (value) {
-                      Navigator.pop(context);
-                      widget.applyValue(value as T);
-                      setState(() {});
-                    },
-                  ),
-              ],
+            content: RadioGroup<T>(
+              groupValue: widget.buildGroupValue(),
+              onChanged: (value) {
+                Navigator.pop(context);
+                widget.applyValue(value as T);
+                setState(() {});
+              },
+              child: Column(
+                children: [
+                  for (final item in widget.itemNameValue.entries)
+                    RadioListTile<T>(
+                      title: Text(item.key),
+                      value: item.value,
+                    ),
+                ],
+              ),
             ),
           ),
         );

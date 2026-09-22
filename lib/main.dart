@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +9,6 @@ import 'package:miru_app/controllers/application_controller.dart';
 import 'package:miru_app/utils/log.dart';
 import 'package:miru_app/utils/miru_directory.dart';
 import 'package:miru_app/utils/request.dart';
-import 'package:miru_app/views/pages/debug_page.dart';
 import 'package:miru_app/views/pages/main_page.dart';
 import 'package:miru_app/router/router.dart';
 import 'package:miru_app/utils/extension.dart';
@@ -28,22 +25,6 @@ void main(List<String> args) async {
     };
 
     WidgetsFlutterBinding.ensureInitialized();
-
-    // 多窗口
-    if (args.firstOrNull == 'multi_window') {
-      final windowId = int.parse(args[1]);
-      final arguments = args[2].isEmpty
-          ? const {}
-          : jsonDecode(args[2]) as Map<String, dynamic>;
-
-      Map windows = {
-        "debug": ExtensionDebugWindow(
-          windowController: WindowController.fromWindowId(windowId),
-        ),
-      };
-      runApp(windows[arguments["name"]]);
-      return;
-    }
 
     // 主窗口
     await MiruDirectory.ensureInitialized();

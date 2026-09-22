@@ -96,6 +96,8 @@ class DatabaseService {
   // 更新历史
 
   static Future<Id> putHistory(History history) async {
+    // Isar composite index writes are required for upsert semantics.
+    // ignore: experimental_member_use
     return db.writeTxn(() => db.historys.putByIndex(r'package&url', history));
   }
 
@@ -174,6 +176,7 @@ class DatabaseService {
     extSetting.title = extensionSetting.title;
 
     return db.writeTxn(
+      // ignore: experimental_member_use
       () => db.extensionSettings.putByIndex(r'package&key', extSetting),
     );
   }
@@ -236,6 +239,7 @@ class DatabaseService {
     String? anilistID,
   }) {
     return db.writeTxn(
+      // ignore: experimental_member_use
       () => db.miruDetails.putByIndex(
         r'package&url',
         MiruDetail()
