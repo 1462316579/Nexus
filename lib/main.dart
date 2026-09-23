@@ -94,7 +94,7 @@ class _MainAppState extends State<MainApp> {
 
   Widget _buildMobileMain(BuildContext context) {
     return GetMaterialApp(
-      title: "Miru",
+      title: "Nexus",
       debugShowCheckedModeBanner: false,
       themeMode: c.theme,
       theme: c.currentThemeData,
@@ -108,7 +108,7 @@ class _MainAppState extends State<MainApp> {
 
   Widget _buildDesktopMain(BuildContext context) {
     return fluent.FluentApp.router(
-      title: 'Miru',
+      title: 'Nexus',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       themeMode: c.theme,

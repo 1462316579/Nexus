@@ -193,10 +193,9 @@ class DetailPageController extends GetxController {
           jsonDecode(_miruDetail!.data),
         ),
       );
-      getRemoteDeatil();
-    } else {
-      await getRemoteDeatil();
+      if (detail!.episodes?.isNotEmpty == true) return;
     }
+    await getRemoteDeatil();
   }
 
   getRemoteDeatil() async {
@@ -292,8 +291,8 @@ class DetailPageController extends GetxController {
       url,
     );
     if (history_ != null) {
-      // 并且剧集的数量大于历史记录的剧集列表数量 防止历史记录超出剧集列表数量
-      if (history_.episodeGroupId < detail!.episodes!.length) {
+      final episodes = detail?.episodes ?? [];
+      if (history_.episodeGroupId < episodes.length) {
         history.value = history_;
         selectEpGroup.value = history_.episodeGroupId;
       }

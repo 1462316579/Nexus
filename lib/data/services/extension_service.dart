@@ -18,6 +18,7 @@ import 'package:flutter_js/flutter_js.dart';
 import 'package:miru_app/models/index.dart';
 import 'package:miru_app/data/services/database_service.dart';
 import 'package:miru_app/utils/extension.dart';
+import 'package:miru_app/utils/extension_js_call.dart';
 import 'package:flutter_js/javascriptcore/jscore_runtime.dart';
 
 class ExtensionService {
@@ -150,7 +151,16 @@ class ExtensionService {
     jsGetMessage(dynamic args) async {
       final setting =
           await DatabaseService.getExtensionSetting(extension.package, args[0]);
-      return setting!.value ?? setting.defaultValue;
+      return setting?.value ?? setting?.defaultValue;
+    }
+
+    jsSetSetting(dynamic args) async {
+      await DatabaseService.setExtensionSettingValue(
+        extension.package,
+        args[0].toString(),
+        args[1].toString(),
+      );
+      return true;
     }
 
     jsCleanSettings(dynamic args) async {
@@ -242,6 +252,7 @@ class ExtensionService {
     runtime.onMessage('request', (args) => jsRequest(args));
     // 设置
     runtime.onMessage('registerSetting', (args) => jsRegisterSetting(args));
+    runtime.onMessage('setSetting', (args) => jsSetSetting(args));
     // 清理扩展设置
     runtime.onMessage('cleanSettings', (dynamic args) => jsCleanSettings(args));
     // xpath 选择器
@@ -273,6 +284,7 @@ class ExtensionService {
       handleDartBridge('querySelector$className', jsQuerySelector);
       handleDartBridge('registerSetting$className', jsRegisterSetting);
       handleDartBridge('getSetting$className', jsGetMessage);
+      handleDartBridge('setSetting$className', jsSetSetting);
     }
     // 初始化运行扩展
     await _initRunExtension(content);
@@ -427,6 +439,9 @@ class Extension {
     console.log(JSON.stringify([settings]));
     this.settingKeys.push(settings.key);
     return await handlePromise("registerSetting$className",JSON.stringify([settings]));
+  }
+  async setSetting(key, value) {
+    return await handlePromise("setSetting$className",JSON.stringify([key, value]));
   }
   login() { return null; }
   loginForm() { return []; }
@@ -626,6 +641,9 @@ async function stringify(callback) {
               this.settingKeys.push(settings.key);
               return sendMessage("registerSetting", JSON.stringify([settings]));
             }
+            async setSetting(key, value) {
+              return sendMessage("setSetting", JSON.stringify([key, value]));
+            }
             async load() {}
             login() {
               return null;
@@ -731,10 +749,15 @@ async function stringify(callback) {
     Map<String, List<String>>? filter,
   }) async {
     return runExtension(() async {
+      final invocation = extensionJsCall(
+        className,
+        'search',
+        [kw, page, filter ?? <String, List<String>>{}],
+      );
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.search("$kw",$page,${filter == null ? null : jsonEncode(filter)})'
-            : 'stringify(()=>${className}Instance.search("$kw",$page,${filter == null ? null : jsonEncode(filter)}))'),
+        await runtime.evaluateAsync(
+          Platform.isLinux ? invocation : 'stringify(()=>$invocation)',
+        ),
       );
       List<ExtensionListItem> result =
           jsonDecode(jsResult.stringResult).map<ExtensionListItem>((e) {
@@ -756,9 +779,12 @@ async function stringify(callback) {
           ? '${className}Instance.createFilter()'
           : 'stringify(()=>${className}Instance.createFilter())';
     } else {
-      eval = Platform.isLinux
-          ? '${className}Instance.createFilter(JSON.parse(\'${jsonEncode(filter)}\'))'
-          : 'stringify(()=>${className}Instance.createFilter(JSON.parse(\'${jsonEncode(filter)}\')))';
+      final invocation = extensionJsCall(
+        className,
+        'createFilter',
+        [filter],
+      );
+      eval = Platform.isLinux ? invocation : 'stringify(()=>$invocation)';
     }
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
@@ -776,10 +802,11 @@ async function stringify(callback) {
 
   Future<ExtensionDetail> detail(String url) async {
     return runExtension(() async {
+      final invocation = extensionJsCall(className, 'detail', [url]);
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.detail("$url")'
-            : 'stringify(()=>${className}Instance.detail("$url"))'),
+        await runtime.evaluateAsync(
+          Platform.isLinux ? invocation : 'stringify(()=>$invocation)',
+        ),
       );
       final result =
           ExtensionDetail.fromJson(jsonDecode(jsResult.stringResult));
@@ -790,10 +817,11 @@ async function stringify(callback) {
 
   Future<Object?> watch(String url) async {
     return runExtension(() async {
+      final invocation = extensionJsCall(className, 'watch', [url]);
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.watch("$url")'
-            : 'stringify(()=>${className}Instance.watch("$url"))'),
+        await runtime.evaluateAsync(
+          Platform.isLinux ? invocation : 'stringify(()=>$invocation)',
+        ),
       );
       final data = jsonDecode(jsResult.stringResult);
 
@@ -824,19 +852,30 @@ async function stringify(callback) {
     }
   }
 
-  Future<String?> login() async {
+  Future<Map<String, dynamic>> loginConfig() async {
     return runExtension(() async {
       final result = await _evaluateMusic('login', []);
       final data = jsonDecode(result.stringResult);
-      if (data == null) return null;
-      if (data is String) return data;
-      final config = Map<String, dynamic>.from(data as Map);
-      if (config['mode'] != null && config['mode'] != 'webview') {
-        throw FormatException('Unsupported login mode: ${config['mode']}');
+      if (data == null) {
+        return {'mode': 'webview', 'url': extension.webSite};
       }
-      return config['url'] as String?;
+      if (data is String) {
+        return {'mode': 'webview', 'url': data};
+      }
+      final config = Map<String, dynamic>.from(data as Map);
+      final mode = config['mode'] as String? ?? 'webview';
+      if (!{'webview', 'form'}.contains(mode)) {
+        throw FormatException('Unsupported login mode: $mode');
+      }
+      return {
+        ...config,
+        'mode': mode,
+        'url': config['url'] as String? ?? extension.webSite,
+      };
     });
   }
+
+  Future<String?> login() async => (await loginConfig())['url'] as String?;
 
   Future<List<Map<String, dynamic>>> loginForm() async {
     return runExtension(() async {
@@ -923,10 +962,10 @@ async function stringify(callback) {
   }
 
   Future<dynamic> _evaluateMusic(String method, List<dynamic> args) async {
-    final encodedArgs = jsonEncode(args);
+    final invocation = extensionJsCall(className, method, args);
     final expression = Platform.isLinux
-        ? '${className}Instance.$method(...JSON.parse(\'${encodedArgs.replaceAll("'", "\\'")}\'))'
-        : 'stringify(() => ${className}Instance.$method(...JSON.parse(\'${encodedArgs.replaceAll("'", "\\'")}\')))';
+        ? invocation
+        : extensionJsPromiseCall(className, method, args);
     return runtime.handlePromise(await runtime.evaluateAsync(expression));
   }
 

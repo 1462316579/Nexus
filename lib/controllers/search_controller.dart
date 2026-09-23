@@ -52,6 +52,9 @@ class SearchPageController extends GetxController {
       final element = searchResultList[i];
       element.completed = false;
       element.result = null;
+      element.page = 1;
+      element.filters = null;
+      element.selectedFilters.clear();
       element.error = null;
       Future<List<ExtensionListItem>> resultFuture;
 
@@ -62,15 +65,11 @@ class SearchPageController extends GetxController {
       }
 
       futures.add(
-        resultFuture.then((result) {
-          if (_randomKey != key) {
-            return;
-          }
+        resultFuture.then<void>((result) {
+          if (_randomKey != key) return;
           element.result = result;
-          // 如果搜索结果不为空,
           if (prioritizeResults && result.isNotEmpty) {
             searchResultList.remove(element);
-            // 将有结果的插件优先显示。
             if (lastResultIndex == -1) {
               searchResultList.insert(0, element);
               lastResultIndex = 0;
@@ -79,11 +78,13 @@ class SearchPageController extends GetxController {
               lastResultIndex++;
             }
           }
-        }).catchError((e) {
-          element.error = e.toString();
+        }).catchError((Object error) {
+          if (_randomKey == key) element.error = error.toString();
         }).whenComplete(() {
-          element.completed = true;
-          if (_randomKey == key) searchResultList.refresh();
+          if (_randomKey == key) {
+            element.completed = true;
+            searchResultList.refresh();
+          }
         }),
       );
     }
@@ -98,11 +99,19 @@ class SearchPageController extends GetxController {
     try {
       final nextPage = result.page + 1;
       final data = search.value.isEmpty
-          ? await result.runitme.latest(nextPage)
+          ? result.selectedFilters.isEmpty
+              ? await result.runitme.latest(nextPage)
+              : await result.runitme.search(
+                  '',
+                  nextPage,
+                  filter: result.selectedFilters,
+                )
           : await result.runitme.search(
               search.value,
               nextPage,
-              filter: result.selectedFilters,
+              filter: result.selectedFilters.isEmpty
+                  ? null
+                  : result.selectedFilters,
             );
       result.result!.addAll(data);
       result.page = nextPage;
@@ -119,23 +128,31 @@ class SearchPageController extends GetxController {
       filter: result.selectedFilters.isEmpty ? null : result.selectedFilters,
     );
     for (final entry in result.filters!.entries) {
-      result.selectedFilters.putIfAbsent(entry.key, () => [entry.value.defaultOption]);
+      result.selectedFilters.putIfAbsent(
+        entry.key,
+        () => entry.value.defaultOption.isEmpty
+            ? <String>[]
+            : [entry.value.defaultOption],
+      );
     }
     searchResultList.refresh();
   }
 
-  Future<void> applyFilters(SearchResult result, Map<String, List<String>> filters) async {
+  Future<void> applyFilters(
+      SearchResult result, Map<String, List<String>> filters) async {
     result.selectedFilters = filters;
     result.page = 1;
     result.loadingMore = true;
     result.error = null;
     searchResultList.refresh();
     try {
-      result.result = await result.runitme.search(
-        search.value,
-        1,
-        filter: filters,
-      );
+      result.result = search.value.isEmpty && filters.isEmpty
+          ? await result.runitme.latest(1)
+          : await result.runitme.search(
+              search.value,
+              1,
+              filter: filters.isEmpty ? null : filters,
+            );
     } catch (error) {
       result.error = error.toString();
     } finally {
@@ -162,6 +179,10 @@ class SearchResult {
   List<ExtensionListItem>? result;
   String? error;
   bool completed;
+  bool loadingMore = false;
+  int page = 1;
+  Map<String, ExtensionFilter>? filters;
+  Map<String, List<String>> selectedFilters = {};
   SearchResult({
     required this.runitme,
     this.error,

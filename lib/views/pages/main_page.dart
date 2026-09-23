@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+import 'package:miru_app/views/pages/ai_chat_page.dart';
 import 'package:miru_app/views/pages/extension/extension_page.dart';
 import 'package:miru_app/views/pages/home_page.dart';
 import 'package:miru_app/controllers/main_controller.dart';
@@ -54,7 +55,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
       child: Align(
         alignment: AlignmentDirectional.centerStart,
         child: Text(
-          'Miru',
+          'Nexus',
           style: TextStyle(
             fontSize: 20.0,
             fontWeight: FontWeight.bold,
@@ -182,6 +183,14 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
               router.go('/extension');
             },
           ),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.chat),
+            title: const Text('AI 对话'),
+            body: const SizedBox.shrink(),
+            onTap: () {
+              router.go('/ai-chat');
+            },
+          ),
         ],
       ),
     );
@@ -230,6 +239,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     HomePage(),
     SearchPage(),
     ExtensionPage(),
+    AiChatPage(),
     SettingsPage(),
   ];
 
@@ -249,6 +259,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       _Destination(Icons.search_outlined, Icons.search, 'common.search'.i18n),
       _Destination(
           Icons.extension_outlined, Icons.extension, 'common.extension'.i18n),
+      const _Destination(Icons.chat_bubble_outline, Icons.chat, 'AI 对话'),
       _Destination(
           Icons.settings_outlined, Icons.settings, 'common.settings'.i18n),
     ];

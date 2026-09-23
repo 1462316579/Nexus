@@ -136,6 +136,19 @@ class DatabaseService {
     return db.writeTxn(() => db.extensionSettings.put(extensionSetting));
   }
 
+  static Future<Id> setExtensionSettingValue(
+    String package,
+    String key,
+    String value,
+  ) async {
+    final setting = await getExtensionSetting(package, key);
+    if (setting == null) {
+      throw StateError('Extension setting is not registered: $package/$key');
+    }
+    setting.value = value;
+    return db.writeTxn(() => db.extensionSettings.put(setting));
+  }
+
   // 获取扩展设置
   static Future<ExtensionSetting?> getExtensionSetting(
       String package, String key) async {

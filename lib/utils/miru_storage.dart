@@ -104,7 +104,6 @@ class MiruStorage {
   }
 
   static _initSettings() async {
-    await _initSetting(SettingKey.miruRepoUrl, "https://miru-repo.0n0.dev");
     await _initSetting(SettingKey.tmdbKey, "");
     await _initSetting(SettingKey.aiBaseUrl, 'https://api.openai.com/v1');
     await _initSetting(SettingKey.aiApiKey, '');
@@ -174,7 +173,6 @@ class MiruStorage {
 
 class SettingKey {
   static const theme = "Theme";
-  static const miruRepoUrl = "MiruRepoUrl";
   static const tmdbKey = 'TMDBKey';
   static const aiBaseUrl = 'AIBaseUrl';
   static const aiApiKey = 'AIApiKey';

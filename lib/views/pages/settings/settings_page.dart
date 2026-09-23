@@ -359,8 +359,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (Platform.isAndroid) {
                     Get.to(() => ExtensionLoginPage(runtime: runtime));
                   } else {
-                    router
-                        .push('/extension_login/${runtime.extension.package}');
+                    router.go('/extension_login/${runtime.extension.package}');
                   }
                 },
               ),
@@ -609,7 +608,7 @@ class _SettingsPageState extends State<SettingsPage> {
           width: 24,
           height: 24,
         ),
-        title: "Miru",
+        title: "Nexus",
         subTitle: "AGPL-3.0 License",
         open: true,
         noPage: true,

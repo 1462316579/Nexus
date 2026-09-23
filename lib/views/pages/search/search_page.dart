@@ -54,20 +54,22 @@ class _SearchPageState extends State<SearchPage> {
           },
           hintText: "search.hint-text".i18n,
           title: "common.search".i18n,
-          flexibleSpace: Obx(
-            () => Column(
-              children: [
-                if (c.finishCount != c.searchResultList.length)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: LinearProgressIndicator(
-                      value: (c.finishCount / c.searchResultList.length),
-                      minHeight: 2,
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          flexibleSpace: Obx(() {
+            final total = c.searchResultList.length;
+            if (total == 0 || c.finishCount == total) {
+              return const SizedBox.shrink();
+            }
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: LinearProgressIndicator(
+                  value: c.finishCount / total,
+                  minHeight: 2,
+                ),
+              ),
+            );
+          }),
           bottom: TabBar(
             tabs: [
               Tab(text: 'search.all'.i18n),
@@ -132,7 +134,8 @@ class _SearchPageState extends State<SearchPage> {
     return Obx(
       () => Column(
         children: [
-          if (c.finishCount != c.searchResultList.length)
+          if (c.searchResultList.isNotEmpty &&
+              c.finishCount != c.searchResultList.length)
             SizedBox(
               height: 4,
               width: double.infinity,

@@ -45,7 +45,8 @@ class _InfiniteScrollerState extends State<InfiniteScroller> {
       if (_isLoding || !widget.enableInfiniteScroll) {
         return;
       }
-      widget.onLoad().then((_) {
+      _isLoding = true;
+      widget.onLoad().whenComplete(() {
         if (mounted) {
           setState(() {
             _isLoding = false;

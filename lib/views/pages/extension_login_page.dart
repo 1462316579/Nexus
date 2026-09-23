@@ -14,15 +14,11 @@ class ExtensionLoginPage extends StatefulWidget {
 }
 
 class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
-  late final Future<String> loginUrl = _getLoginUrl();
-  late final Future<List<Map<String, dynamic>>> form =
-      widget.runtime.loginForm();
+  late final Future<Map<String, dynamic>> _config =
+      widget.runtime.loginConfig();
   final Map<String, TextEditingController> _values = {};
   bool _busy = false;
   String? _message;
-
-  Future<String> _getLoginUrl() async =>
-      await widget.runtime.login() ?? widget.runtime.extension.webSite;
 
   @override
   void dispose() {
@@ -42,9 +38,11 @@ class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
       _message = null;
     });
     try {
-      final result =
-          await widget.runtime.sendLoginVerificationCode(key, _formValues);
-      if (mounted) setState(() => _message = result);
+      final message = await widget.runtime.sendLoginVerificationCode(
+        key,
+        _formValues,
+      );
+      if (mounted) setState(() => _message = message);
     } catch (error) {
       ExtensionUtils.addLog(
         widget.runtime.extension,
@@ -77,26 +75,7 @@ class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
     }
   }
 
-  Widget _loginForm(List<Map<String, dynamic>> fields) {
-    if (fields.isEmpty) {
-      return FutureBuilder<String>(
-        future: loginUrl,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: SelectableText(snapshot.error.toString()));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return WebViewPage(
-            key: ValueKey(snapshot.data),
-            extensionRuntime: widget.runtime,
-            url: snapshot.data!,
-          );
-        },
-      );
-    }
-
+  Widget _formPage(List<Map<String, dynamic>> fields) {
     for (final field in fields) {
       final key = field['key'];
       if (key is String) {
@@ -172,19 +151,44 @@ class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<List<Map<String, dynamic>>>(
-        future: form,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Scaffold(
-                body: Center(child: SelectableText(snapshot.error.toString())));
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+        future: _config,
+        builder: (context, configSnapshot) {
+          if (configSnapshot.hasError) {
+            return _errorPage(configSnapshot.error!);
           }
-          if (!snapshot.hasData) {
+          if (!configSnapshot.hasData) {
             return const Scaffold(
-                body: Center(child: CircularProgressIndicator()));
+              body: Center(child: CircularProgressIndicator()),
+            );
           }
-          return _loginForm(snapshot.data!);
+          final config = configSnapshot.data!;
+          if (config['mode'] == 'form') {
+            return FutureBuilder<List<Map<String, dynamic>>>(
+              future: widget.runtime.loginForm(),
+              builder: (context, formSnapshot) {
+                if (formSnapshot.hasError) {
+                  return _errorPage(formSnapshot.error!);
+                }
+                if (!formSnapshot.hasData) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                return _formPage(formSnapshot.data!);
+              },
+            );
+          }
+          return WebViewPage(
+            key: ValueKey(config['url']),
+            extensionRuntime: widget.runtime,
+            url: config['url'] as String,
+          );
         },
+      );
+
+  Widget _errorPage(Object error) => Scaffold(
+        appBar: AppBar(title: Text('${widget.runtime.extension.name} 登录')),
+        body: Center(child: SelectableText(error.toString())),
       );
 }

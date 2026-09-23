@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:miru_app/data/services/extension_service.dart';
 import 'package:miru_app/utils/miru_storage.dart';
-import 'package:webview_cookie_manager/webview_cookie_manager.dart';
 
 class WebViewPage extends StatefulWidget {
   const WebViewPage({
@@ -21,15 +20,22 @@ class _WebViewPageState extends State<WebViewPage> {
   late String url = Uri.parse(widget.url).hasScheme
       ? widget.url
       : widget.extensionRuntime.extension.webSite + widget.url;
-  final cookieManager = WebviewCookieManager();
+  final cookieManager = CookieManager.instance();
   late Uri loadUrl = Uri.parse(url);
 
   Future<void> _setCookie(String currentUrl) async {
     final currentUri = Uri.tryParse(currentUrl);
-    if (currentUri == null || currentUri.host != Uri.parse(url).host) return;
-    final cookies = await cookieManager.getCookies(currentUrl);
+    final siteHost = Uri.parse(widget.extensionRuntime.extension.webSite).host;
+    if (currentUri == null ||
+        (currentUri.host != siteHost &&
+            !currentUri.host.endsWith('.$siteHost'))) {
+      return;
+    }
+    final cookies = await cookieManager.getCookies(url: WebUri(currentUrl));
     final cookieString = cookies.map((e) => '${e.name}=${e.value}').join(';');
-    await widget.extensionRuntime.setCookie(cookieString);
+    if (cookieString.isNotEmpty) {
+      await widget.extensionRuntime.setCookie(cookieString);
+    }
   }
 
   @override

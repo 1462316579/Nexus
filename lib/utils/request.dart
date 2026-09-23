@@ -44,13 +44,14 @@ class MiruRequest {
   }
 
   static Future<void> setCookie(String cookies, String url) async {
-    final cookieList = cookies.split(';');
-    for (final cookie in cookieList) {
-      await _cookieJar.saveFromResponse(
-        Uri.parse(url),
-        [Cookie.fromSetCookieValue(cookie)],
-      );
-    }
+    final cookieList = cookies
+        .split(';')
+        .map((cookie) => cookie.trim())
+        .where((cookie) => cookie.isNotEmpty)
+        .map(Cookie.fromSetCookieValue)
+        .toList();
+    if (cookieList.isEmpty) return;
+    await _cookieJar.saveFromResponse(Uri.parse(url), cookieList);
   }
 
   static Future<String> getCookie(String url) async {

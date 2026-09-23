@@ -105,9 +105,9 @@ class FilePickerWindows extends FilePicker {
     if (!SUCCEEDED(hr)) throw WindowsException(hr);
 
     final options = optionsPointer.value |
-        FILEOPENDIALOGOPTIONS.FOS_PICKFOLDERS |
-        FILEOPENDIALOGOPTIONS.FOS_FORCEFILESYSTEM |
-        FILEOPENDIALOGOPTIONS.FOS_NOCHANGEDIR;
+        FOS_PICKFOLDERS |
+        FOS_FORCEFILESYSTEM |
+        FOS_NOCHANGEDIR;
     hr = fileDialog.setOptions(options);
     if (!SUCCEEDED(hr)) throw WindowsException(hr);
 
@@ -146,7 +146,7 @@ class FilePickerWindows extends FilePicker {
 
     final item = IShellItem(ppsi);
     final pathPtr = calloc<Pointer<Utf16>>();
-    hr = item.getDisplayName(SIGDN.SIGDN_FILESYSPATH, pathPtr);
+    hr = item.getDisplayName(SIGDN_FILESYSPATH, pathPtr);
     if (!SUCCEEDED(hr)) throw WindowsException(hr);
 
     final path = pathPtr.value.toDartString();

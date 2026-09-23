@@ -16,6 +16,7 @@ import 'package:miru_app/views/pages/favorites_page.dart';
 import 'package:miru_app/views/pages/main_page.dart';
 import 'package:miru_app/views/pages/content_module_page.dart';
 import 'package:miru_app/views/pages/code_edit_page.dart';
+import 'package:miru_app/views/pages/ai_chat_page.dart';
 import 'package:miru_app/views/pages/library_page.dart';
 import 'package:miru_app/views/pages/music_page.dart';
 import 'package:miru_app/views/pages/music_plugin_editor_page.dart';
@@ -107,7 +108,8 @@ final router = GoRouter(
         GoRoute(
           path: '/extension_login/:package',
           builder: (context, state) {
-            final runtime = ExtensionUtils.runtimes[state.pathParameters['package']!];
+            final runtime =
+                ExtensionUtils.runtimes[state.pathParameters['package']!];
             if (runtime == null) return const SizedBox.shrink();
             return _animation(ExtensionLoginPage(runtime: runtime));
           },
@@ -140,11 +142,17 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/library/favorites',
-          builder: (context, state) => _animation(const LibraryPage(history: false)),
+          builder: (context, state) =>
+              _animation(const LibraryPage(history: false)),
         ),
         GoRoute(
           path: '/library/history',
-          builder: (context, state) => _animation(const LibraryPage(history: true)),
+          builder: (context, state) =>
+              _animation(const LibraryPage(history: true)),
+        ),
+        GoRoute(
+          path: '/ai-chat',
+          builder: (context, state) => _animation(const AiChatPage()),
         ),
         GoRoute(
           path: '/extension_code',
@@ -157,7 +165,8 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/music/new-plugin',
-          builder: (context, state) => _animation(const MusicPluginEditorPage()),
+          builder: (context, state) =>
+              _animation(const MusicPluginEditorPage()),
         ),
         GoRoute(
           path: '/detail',

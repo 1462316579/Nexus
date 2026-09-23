@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:miru_app/models/extension.dart';
 import 'package:miru_app/utils/extension.dart';
 import 'package:miru_app/utils/i18n.dart';
-import 'package:miru_app/utils/miru_storage.dart';
 import 'package:miru_app/views/widgets/cache_network_image.dart';
 import 'package:miru_app/views/widgets/platform_widget.dart';
 import 'package:miru_app/views/widgets/progress.dart';
@@ -32,6 +31,7 @@ class ExtensionCard extends StatefulWidget {
 }
 
 class _ExtensionCardState extends State<ExtensionCard> {
+  static const _repoUrl = 'https://miru-repo.0n0.dev';
   bool isLoading = false;
   bool isInstall = false;
   bool hasUpgrade = false;
@@ -53,8 +53,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
       isLoading = true;
     });
     try {
-      final url = MiruStorage.getSetting(SettingKey.miruRepoUrl) +
-          "/repo/${widget.package}.js";
+      final url = '$_repoUrl/repo/${widget.package}.js';
       debugPrint(url);
       await ExtensionUtils.install(url, context);
       isLoading = false;
