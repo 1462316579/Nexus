@@ -139,6 +139,15 @@ class MiruStorage {
         SettingKey.subtitleBackgroundColor, Colors.black.toARGB32());
     await _initSetting(SettingKey.subtitleBackgroundOpacity, 0.5);
     await _initSetting(SettingKey.subtitleTextAlign, TextAlign.center.index);
+    await _initSetting(SettingKey.extensionRepoUrl, '');
+    await _initSetting(SettingKey.extensionRepoIndex, '[]');
+    await _initSetting(SettingKey.extensionChatMessages, '[]');
+    await _initSetting(SettingKey.extensionChatSelectedPackage, '');
+    await _initSetting(SettingKey.extensionChatPendingCode, '');
+    await _initSetting(SettingKey.extensionChatPendingPackage, '');
+    await _initSetting(SettingKey.extensionChatPendingSummary, '');
+    await _initSetting(SettingKey.extensionChatBrowserUrl, '');
+    await _initSetting(SettingKey.extensionChatShowBrowser, false);
   }
 
   static _initSetting(String key, dynamic value) async {
@@ -208,4 +217,15 @@ class SettingKey {
   static const subtitleTextAlign = "SubtitleTextAlign";
   static const subtitleLastLanguageSelected = "SubtitleLastLanguageSelected";
   static const subtitleLastTitleSelected = "SubtitleLastTitleSelected";
+  static const extensionRepoUrl = 'ExtensionRepoUrl';
+  static const extensionRepoIndex = 'ExtensionRepoIndex';
+
+  // AI 对话相关设置
+  static const extensionChatMessages = 'ExtensionChatMessages';
+  static const extensionChatSelectedPackage = 'ExtensionChatSelectedPackage';
+  static const extensionChatPendingCode = 'ExtensionChatPendingCode';
+  static const extensionChatPendingPackage = 'ExtensionChatPendingPackage';
+  static const extensionChatPendingSummary = 'ExtensionChatPendingSummary';
+  static const extensionChatBrowserUrl = 'ExtensionChatBrowserUrl';
+  static const extensionChatShowBrowser = 'ExtensionChatShowBrowser';
 }

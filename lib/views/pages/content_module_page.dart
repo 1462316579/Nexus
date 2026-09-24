@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:miru_app/controllers/search_controller.dart';
 import 'package:miru_app/models/extension.dart';
+import 'package:miru_app/utils/extension.dart';
 import 'package:miru_app/views/widgets/extension_item_card.dart';
 import 'package:miru_app/views/widgets/infinite_scroller.dart';
 import 'package:miru_app/views/widgets/platform_widget.dart';
@@ -36,14 +37,35 @@ class _ContentModulePageState extends State<ContentModulePage> {
     controller.isPageOpen = true;
     searchController = TextEditingController(text: controller.search.value);
     controller.getRuntime(type: widget.type, prioritizeResults: false);
+    // 首次启动时插件运行时可能尚未初始化完成，加载结束后自动刷新本页
+    ExtensionUtils.addExtensionUpdateListener(_onExtensionsUpdated);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final result = selectedResult;
       if (result != null) _loadFilters(result);
     });
   }
 
+  void _onExtensionsUpdated() {
+    if (!mounted) return;
+    controller.getRuntime(
+      type: widget.type,
+      prioritizeResults: false,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadFiltersIfNeeded();
+    });
+  }
+
+  void _loadFiltersIfNeeded() {
+    final result = selectedResult;
+    if (result != null && result.filters == null && result.error == null) {
+      _loadFilters(result);
+    }
+  }
+
   @override
   void dispose() {
+    ExtensionUtils.removeExtensionUpdateListener(_onExtensionsUpdated);
     controller.isPageOpen = false;
     Get.delete<SearchPageController>(tag: controllerTag);
     _contentScrollController.dispose();
@@ -244,9 +266,13 @@ class _ContentModulePageState extends State<ContentModulePage> {
   Widget _contentSliver(BuildContext context) {
     final result = selectedResult;
     if (result == null) {
-      return const SliverFillRemaining(
+      return SliverFillRemaining(
         hasScrollBody: false,
-        child: Center(child: Text('暂无可用插件')),
+        child: Center(
+          child: ExtensionUtils.isLoaded
+              ? const Text('暂无可用插件')
+              : const CircularProgressIndicator(),
+        ),
       );
     }
     if (result.error != null && result.result == null) {

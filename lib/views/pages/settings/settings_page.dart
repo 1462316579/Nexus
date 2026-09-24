@@ -350,18 +350,32 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             for (final runtime in ExtensionUtils.runtimes.values
                 .where((runtime) => runtime.supportsLogin))
-              SettingsTile(
-                isCard: true,
-                icon: const Icon(Icons.login),
-                title: '${runtime.extension.name} 登录',
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  if (Platform.isAndroid) {
-                    Get.to(() => ExtensionLoginPage(runtime: runtime));
-                  } else {
-                    router.go('/extension_login/${runtime.extension.package}');
-                  }
-                },
+              AnimatedBuilder(
+                animation: runtime,
+                builder: (context, _) => SettingsTile(
+                  isCard: true,
+                  icon: const Icon(Icons.login),
+                  title: '${runtime.extension.name} 登录',
+                  buildSubtitle: () => runtime.isLoggedIn
+                      ? '已登录${runtime.loginUserLabel == null ? '' : '（${runtime.loginUserLabel}）'}'
+                      : '未登录',
+                  trailing: Icon(
+                    runtime.isLoggedIn ? Icons.verified : Icons.chevron_right,
+                    color: runtime.isLoggedIn ? Colors.green : null,
+                  ),
+                  onTap: () async {
+                    await runtime.refreshLoginStatus();
+                    if (mounted) setState(() {});
+                    if (Platform.isAndroid) {
+                      await Get.to(() => ExtensionLoginPage(runtime: runtime));
+                      await runtime.refreshLoginStatus();
+                      if (mounted) setState(() {});
+                    } else {
+                      router
+                          .go('/extension_login/${runtime.extension.package}');
+                    }
+                  },
+                ),
               ),
             const SizedBox(height: 10),
           ],

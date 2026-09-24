@@ -14,6 +14,7 @@ import 'package:miru_app/utils/router.dart';
 import 'package:miru_app/views/widgets/button.dart';
 import 'package:miru_app/views/widgets/messenger.dart';
 import 'package:miru_app/views/widgets/platform_widget.dart';
+import 'package:miru_app/views/widgets/extension/extension_type_filter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ExtensionPage extends StatefulWidget {
@@ -123,15 +124,93 @@ class _ExtensionPageState extends State<ExtensionPage> {
   }
 
   Future<void> _importByLocal() async {
+    // 支持 .js、.json 文件和目录选择
     final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
       type: FileType.custom,
-      allowedExtensions: ['js'],
+      allowedExtensions: ['js', 'json'],
     );
     if (result == null || !mounted) return;
-    final path = result.files.single.path;
-    if (path == null) return;
-    final script = File(path).readAsStringSync();
-    await ExtensionUtils.installByScript(script, context);
+
+    int totalInstalled = 0;
+    final paths = result.files
+        .where((f) => f.path != null)
+        .map((f) => f.path!)
+        .toList();
+
+    if (paths.isEmpty) return;
+
+    for (final filePath in paths) {
+      final ext = filePath.toLowerCase();
+
+      if (ext.endsWith('.json')) {
+        // JSON 聚合文件导入
+        try {
+          final installed = await ExtensionUtils.installByJson(
+            filePath,
+            context,
+          );
+          totalInstalled += installed;
+        } catch (e) {
+          debugPrint('Failed to import JSON: $e');
+        }
+      } else if (ext.endsWith('.js')) {
+        // 单个 JS 文件导入
+        try {
+          final script = File(filePath).readAsStringSync();
+          await ExtensionUtils.installByScript(script, context);
+          totalInstalled++;
+        } catch (e) {
+          debugPrint('Failed to import JS: $e');
+        }
+      }
+    }
+
+    if (totalInstalled > 0 && mounted) {
+      showPlatformDialog(
+        context: context,
+        title: 'extension.installed'.i18n,
+        content: Text('Successfully imported $totalInstalled plugin(s)'),
+        actions: [
+          PlatformButton(
+            onPressed: () {
+              RouterUtils.pop();
+            },
+            child: Text('common.close'.i18n),
+          ),
+        ],
+      );
+    }
+  }
+
+  Future<void> _importByDirectory() async {
+    final dirPath = await FilePicker.platform.getDirectoryPath();
+    if (dirPath == null || !mounted) return;
+
+    try {
+      final installed = await ExtensionUtils.installByDirectory(
+        dirPath,
+        context,
+      );
+
+      if (mounted) {
+        showPlatformDialog(
+          context: context,
+          title: 'extension.installed'.i18n,
+          content: Text('Successfully imported $installed plugin(s)'),
+          actions: [
+            PlatformButton(
+              onPressed: () {
+                RouterUtils.pop();
+              },
+              child: Text('common.close'.i18n),
+            ),
+          ],
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to import directory: $e');
+    }
   }
 
   void _showAddMenu() {
@@ -163,6 +242,14 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 onTap: () {
                   Navigator.pop(context);
                   _importByLocal();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.filter_list),
+                title: Text('common.show-all'.i18n),
+                onTap: () {
+                  Navigator.pop(context);
+                  _filterDialog();
                 },
               ),
             ],
@@ -206,6 +293,29 @@ class _ExtensionPageState extends State<ExtensionPage> {
       ),
       barrierDismissible: true,
       dismissWithEsc: true,
+    );
+  }
+
+  // 筛选对话框
+  _filterDialog() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Obx(
+            () => ExtensionTypeFilter(
+              selectedType: c.searchType.value,
+              onTypeChanged: (type) {
+                c.searchType.value = type;
+              },
+              compact: true,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -263,6 +373,10 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 onPressed: () => _loadErrorDialog(),
               ),
             IconButton(
+              icon: const Icon(Icons.filter_list),
+              onPressed: () => _filterDialog(),
+            ),
+            IconButton(
               onPressed: _showAddMenu,
               icon: const Icon(Icons.add),
             ),
@@ -276,23 +390,35 @@ class _ExtensionPageState extends State<ExtensionPage> {
             )
           ],
         ),
-        body: ListView(
-          children: [
-            if (c.runtimes.isEmpty)
-              SizedBox(
-                height: 300,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('common.no-extension'.i18n),
-                  ],
-                ),
-              ),
-            for (final ext in c.runtimes.values) ExtensionTile(ext.extension),
-          ],
-        ),
+        body: _buildExtensionList(),
       );
     });
+  }
+
+  Widget _buildExtensionList() {
+    // 过滤扩展
+    var extensions = c.runtimes.values.toList();
+    if (c.searchType.value != null) {
+      extensions = extensions
+          .where((ext) => ext.extension.type == c.searchType.value)
+          .toList();
+    }
+
+    return ListView(
+      children: [
+        if (extensions.isEmpty)
+          SizedBox(
+            height: 300,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('common.no-extension'.i18n),
+              ],
+            ),
+          ),
+        for (final ext in extensions) ExtensionTile(ext.extension),
+      ],
+    );
   }
 
   Widget _buildDesktop(BuildContext context) {
@@ -311,6 +437,14 @@ class _ExtensionPageState extends State<ExtensionPage> {
                   ),
                 ),
                 const Spacer(),
+                // 筛选按钮
+                ExtensionTypeFilter(
+                  selectedType: c.searchType.value,
+                  onTypeChanged: (type) {
+                    c.searchType.value = type;
+                  },
+                ),
+                const SizedBox(width: 16),
                 // 错误按钮
                 if (c.errors.isNotEmpty)
                   fluent.IconButton(
@@ -329,34 +463,8 @@ class _ExtensionPageState extends State<ExtensionPage> {
               ],
             ),
             const SizedBox(height: 16),
-            if (c.runtimes.isEmpty)
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('common.no-extension'.i18n),
-                    const SizedBox(height: 8),
-                    fluent.FilledButton(
-                      child: Text(
-                        'common.extension-repo'.i18n,
-                      ),
-                      onPressed: () {
-                        router.push('/extension_repo');
-                      },
-                    )
-                  ],
-                ),
-              ),
             Expanded(
-              child: ListView(
-                children: [
-                  for (final ext in c.runtimes.values)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ExtensionTile(ext.extension),
-                    ),
-                ],
-              ),
+              child: _buildExtensionList(),
             )
           ],
         ),

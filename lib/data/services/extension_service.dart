@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:charset_converter/charset_converter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_js/extensions/fetch.dart';
@@ -21,9 +22,11 @@ import 'package:miru_app/utils/extension.dart';
 import 'package:miru_app/utils/extension_js_call.dart';
 import 'package:flutter_js/javascriptcore/jscore_runtime.dart';
 
-class ExtensionService {
+class ExtensionService extends ChangeNotifier {
   late JavascriptRuntime runtime;
   bool supportsLogin = false;
+  bool isLoggedIn = false;
+  String? loginUserLabel;
   late Extension extension;
   String _cuurentRequestUrl = '';
   String evalString = '';
@@ -65,16 +68,66 @@ class ExtensionService {
       );
     }
 
+    Future<String> decodeTextResponse(
+      List<int> bytes,
+      Headers responseHeaders,
+    ) async {
+      final raw = Uint8List.fromList(bytes);
+      final contentType = responseHeaders.value('content-type') ?? '';
+      final headerCharset = RegExp(
+        r"""charset\s*=\s*["']?([\w-]+)""",
+        caseSensitive: false,
+      ).firstMatch(contentType)?.group(1);
+      final probe = latin1.decode(raw.take(8192).toList(), allowInvalid: true);
+      final metaCharset = RegExp(
+        r"""<meta[^>]+charset\s*=\s*["']?\s*([\w-]+)|"""
+        r"""<meta[^>]+content\s*=\s*["'][^"']*charset\s*=\s*([\w-]+)""",
+        caseSensitive: false,
+      ).firstMatch(probe);
+      final declared =
+          (headerCharset ?? metaCharset?.group(1) ?? metaCharset?.group(2))
+              ?.toLowerCase();
+      final encoding = declared == 'gb2312' ||
+              declared == 'gbk' ||
+              declared == 'x-gbk' ||
+              declared == 'gb18030'
+          ? 'gb2312'
+          : declared == 'big5'
+              ? 'big5'
+              : null;
+      if (encoding == null) {
+        try {
+          return utf8.decode(raw, allowMalformed: false);
+        } on FormatException {
+          return CharsetConverter.decode('gb2312', raw);
+        }
+      }
+      return CharsetConverter.decode(encoding, raw);
+    }
+
     jsRequest(dynamic args) async {
       _cuurentRequestUrl = args[0];
-      final headers = args[1]['headers'] ?? {};
+      final url = args[0].toString();
+      final headers = Map<String, dynamic>.from(args[1]['headers'] ?? {});
       if (headers['User-Agent'] == null) {
         headers['User-Agent'] = MiruStorage.getUASetting();
       }
+      // 显式注入持久化 Cookie；Dio CookieManager 仍继续负责自动管理，
+      // 这样桥接层和播放链路都能稳定获得登录会话。
+      if (headers['Cookie'] == null) {
+        final cookie = await MiruRequest.getCookie(url);
+        if (cookie.isNotEmpty) headers['Cookie'] = cookie;
+      }
 
-      final url = args[0];
       final method = args[1]['method'] ?? 'get';
-      final requestBody = args[1]['data'];
+      final isBinary = args[1]['binary'] == true;
+      Object? requestBody = args[1]['data'];
+      // 二进制请求（如 protobuf）：JS 侧以字节数组传入，转回 Uint8List 发送
+      if (isBinary && requestBody is List) {
+        requestBody = Uint8List.fromList(
+          requestBody.map((e) => (e as num).toInt()).toList(),
+        );
+      }
 
       final log = ExtensionNetworkLog(
         extension: extension,
@@ -89,18 +142,46 @@ class ExtensionService {
       );
 
       try {
-        final res = await dio.request<String>(
+        if (isBinary) {
+          // 二进制通道：请求体与响应体均为原始字节，响应以 JSON 字节数组回传 JS
+          final res = await dio.request<List<int>>(
+            url,
+            data: requestBody,
+            queryParameters: args[1]['queryParameters'] ?? {},
+            options: Options(
+              headers: headers,
+              method: method,
+              responseType: ResponseType.bytes,
+            ),
+          );
+          final bytes = res.data ?? Uint8List(0);
+          log.requestHeaders = res.requestOptions.headers;
+          log.responseBody = '<binary ${bytes.length} bytes>';
+          log.responseHeaders = res.headers.map.map(
+            (key, value) => MapEntry(key, value.join(';')),
+          );
+          log.statusCode = res.statusCode;
+
+          ExtensionUtils.addNetworkLog(key, log);
+          return jsonEncode(bytes);
+        }
+        final res = await dio.request<List<int>>(
           url,
           data: requestBody,
           queryParameters: args[1]['queryParameters'] ?? {},
           options: Options(
             headers: headers,
             method: method,
+            responseType: ResponseType.bytes,
           ),
         );
+        final responseBytes = res.data ?? const <int>[];
+        final responseHeaders = res.headers;
+        final responseText =
+            await decodeTextResponse(responseBytes, responseHeaders);
         log.requestHeaders = res.requestOptions.headers;
-        log.responseBody = res.data;
-        log.responseHeaders = res.headers.map.map(
+        log.responseBody = responseText;
+        log.responseHeaders = responseHeaders.map.map(
           (key, value) => MapEntry(
             key,
             value.join(';'),
@@ -108,26 +189,31 @@ class ExtensionService {
         );
         log.statusCode = res.statusCode;
 
-        ExtensionUtils.addNetworkLog(
-          key,
-          log,
-        );
-        return res.data;
+        ExtensionUtils.addNetworkLog(key, log);
+        return responseText;
       } on DioException catch (e) {
         log.url = e.requestOptions.uri.toString();
         log.requestHeaders = e.requestOptions.headers;
-        log.responseBody = e.response?.data;
-        log.responseHeaders = e.response?.headers.map.map(
-          (key, value) => MapEntry(
-            key,
-            value.join(';'),
-          ),
+        final errorHeaders = e.response?.headers;
+        final errorBytes = e.response?.data is List<int>
+            ? List<int>.from(e.response!.data as List<int>)
+            : null;
+        final errorText =
+            !isBinary && errorBytes != null && errorHeaders != null
+                ? await decodeTextResponse(errorBytes, errorHeaders)
+                : null;
+        log.responseBody = isBinary && errorBytes != null
+            ? '<binary ${errorBytes.length} bytes>'
+            : errorText ?? e.response?.data?.toString();
+        log.responseHeaders = errorHeaders?.map.map(
+          (key, value) => MapEntry(key, value.join(';')),
         );
         log.statusCode = e.response?.statusCode;
-        ExtensionUtils.addNetworkLog(
-          key,
-          log,
-        );
+        ExtensionUtils.addNetworkLog(key, log);
+        if (e.response != null) {
+          if (isBinary && errorBytes != null) return jsonEncode(errorBytes);
+          return errorText ?? e.response?.data?.toString();
+        }
         rethrow;
       }
     }
@@ -289,6 +375,7 @@ class ExtensionService {
     // 初始化运行扩展
     await _initRunExtension(content);
     supportsLogin = await _isLoginSupported();
+    await refreshLoginStatus();
     return this;
   }
 
@@ -448,6 +535,7 @@ class Extension {
   sendVerificationCode(field, values) { throw new Error("verification code is not supported"); }
   submitLogin(values) { throw new Error("not implement submitLogin"); }
   isLoginSupported() { return false; }
+  getLoginStatus() { return null; }
   async load() {}
 }
 async function handlePromise(channelName,message){
@@ -660,6 +748,9 @@ async function stringify(callback) {
             isLoginSupported() {
               return false;
             }
+            getLoginStatus() {
+              return null;
+            }
           }
 
           async function stringify(callback) {
@@ -816,31 +907,46 @@ async function stringify(callback) {
   }
 
   Future<Object?> watch(String url) async {
-    return runExtension(() async {
-      final invocation = extensionJsCall(className, 'watch', [url]);
-      final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(
-          Platform.isLinux ? invocation : 'stringify(()=>$invocation)',
-        ),
-      );
-      final data = jsonDecode(jsResult.stringResult);
+    try {
+      return await runExtension(() async {
+        final invocation = extensionJsCall(className, 'watch', [url]);
+        final jsResult = await runtime.handlePromise(
+          await runtime.evaluateAsync(
+            Platform.isLinux ? invocation : 'stringify(()=>$invocation)',
+          ),
+        );
+        final data = jsonDecode(jsResult.stringResult);
 
-      switch (extension.type) {
-        case ExtensionType.bangumi:
-          final result = ExtensionBangumiWatch.fromJson(data);
-          result.headers ??= await _defaultHeaders;
-          return result;
-        case ExtensionType.manga:
-          final result = ExtensionMangaWatch.fromJson(data);
-          result.headers ??= await _defaultHeaders;
-          return result;
-        case ExtensionType.fikushon:
-          return ExtensionFikushonWatch.fromJson(data);
-        case ExtensionType.music:
-          throw StateError(
-              'Music extensions use musicStream() instead of watch()');
+        switch (extension.type) {
+          case ExtensionType.bangumi:
+            final result = ExtensionBangumiWatch.fromJson(data);
+            final defaults = await _defaultHeaders;
+            result.headers = {
+              ...defaults,
+              ...?result.headers,
+            };
+            return result;
+          case ExtensionType.manga:
+            final result = ExtensionMangaWatch.fromJson(data);
+            result.headers ??= await _defaultHeaders;
+            return result;
+          case ExtensionType.fikushon:
+            return ExtensionFikushonWatch.fromJson(data);
+          case ExtensionType.music:
+            throw StateError(
+                'Music extensions use musicStream() instead of watch()');
+        }
+      });
+    } catch (_) {
+      // watch() 过程中插件可能因为服务端返回 unauthorized 而主动清
+      // 除本地 token（见 cycani.js 的 _clearAuth 等实现），这里触发
+      // 一次登录状态刷新，让 Settings 页等依赖 isLoggedIn 的 UI 及时
+      // 反映真实状态，避免「设置页显示已登录但播放报错」的不一致。
+      if (supportsLogin) {
+        unawaited(refreshLoginStatus());
       }
-    });
+      rethrow;
+    }
   }
 
   Future<bool> _isLoginSupported() async {
@@ -853,6 +959,9 @@ async function stringify(callback) {
   }
 
   Future<Map<String, dynamic>> loginConfig() async {
+    if (extension.package == 'org.cycani') {
+      return {'mode': 'form'};
+    }
     return runExtension(() async {
       final result = await _evaluateMusic('login', []);
       final data = jsonDecode(result.stringResult);
@@ -878,6 +987,22 @@ async function stringify(callback) {
   Future<String?> login() async => (await loginConfig())['url'] as String?;
 
   Future<List<Map<String, dynamic>>> loginForm() async {
+    if (extension.package == 'org.cycani') {
+      return [
+        {
+          'key': 'username',
+          'label': '账号',
+          'type': 'text',
+          'placeholder': '请输入账号',
+        },
+        {
+          'key': 'password',
+          'label': '密码',
+          'type': 'password',
+          'placeholder': '请输入密码',
+        },
+      ];
+    }
     return runExtension(() async {
       final result = await _evaluateMusic('loginForm', []);
       final data = jsonDecode(result.stringResult);
@@ -902,9 +1027,82 @@ async function stringify(callback) {
     return jsonDecode(result.stringResult)?.toString() ?? '验证码已发送';
   }
 
+  /// 读取扩展设置。
+  ///
+  /// JS 桥接返回的是数据库中存储的原始字符串（例如 JWT 令牌），并不是
+  /// JSON 编码后的文本，因此这里不能使用 jsonDecode，否则形如
+  /// `eyJhbGci...` 的令牌会抛出 FormatException，被上层误判为未登录。
+  Future<String?> getSetting(String key) async {
+    final result = await _evaluateMusic('getSetting', [key]);
+    final value = result.stringResult;
+    if (value == 'null' || value.trim().isEmpty) {
+      return null;
+    }
+    return value;
+  }
+
   Future<bool> submitLogin(Map<String, String> values) async {
     final result = await _evaluateMusic('submitLogin', [values]);
-    return jsonDecode(result.stringResult) == true;
+    final success = jsonDecode(result.stringResult) == true;
+    if (success) await refreshLoginStatus();
+    return success;
+  }
+
+  /// 读取插件通过可选契约 `getLoginStatus()` 上报的登录状态。
+  ///
+  /// 约定返回：
+  /// - `{ loggedIn: true, user?: string }` 表示已登录；
+  /// - `{ loggedIn: false }` 表示未登录；
+  /// - `null` 表示插件未实现该契约，调用方应回退到通用设置键判断。
+  Future<Map<String, dynamic>?> _readLoginStatusFromExtension() async {
+    try {
+      final result = await _evaluateMusic('getLoginStatus', []);
+      final raw = result.stringResult;
+      if (raw.isEmpty || raw == 'null') {
+        return null;
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> refreshLoginStatus() async {
+    bool nextLoggedIn = false;
+    String? nextUserLabel;
+    try {
+      final status = await _readLoginStatusFromExtension();
+      if (status != null) {
+        nextLoggedIn = status['loggedIn'] == true;
+        final user = status['user'] ?? status['username'];
+        final label = user?.toString().trim();
+        nextUserLabel = (label == null || label.isEmpty) ? null : label;
+      } else {
+        // 回退方案：未实现 getLoginStatus 契约的插件，
+        // 通过通用认证设置键判断登录状态。
+        final token = await getSetting('authToken');
+        final user = await getSetting('authUser');
+        final expiresAt = await getSetting('authExpiresAt');
+        final validExpiry = expiresAt == null ||
+            (int.tryParse(expiresAt) ?? 0) >
+                DateTime.now().millisecondsSinceEpoch;
+        nextLoggedIn = token != null && validExpiry;
+        final label = user?.trim();
+        nextUserLabel = (label == null || label.isEmpty) ? null : label;
+      }
+    } catch (_) {
+      nextLoggedIn = false;
+      nextUserLabel = null;
+    }
+    if (isLoggedIn != nextLoggedIn || loginUserLabel != nextUserLabel) {
+      isLoggedIn = nextLoggedIn;
+      loginUserLabel = nextUserLabel;
+      notifyListeners();
+    }
   }
 
   Future<MusicSearchResult> musicSearch(

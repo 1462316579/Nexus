@@ -10,6 +10,7 @@ import 'package:miru_app/views/widgets/button.dart';
 import 'package:miru_app/views/widgets/platform_widget.dart';
 import 'package:miru_app/views/widgets/progress.dart';
 import 'package:miru_app/views/widgets/search_appbar.dart';
+import 'package:miru_app/views/widgets/extension/extension_type_filter.dart';
 
 class ExtensionRepoPage extends StatefulWidget {
   const ExtensionRepoPage({super.key});
@@ -36,43 +37,14 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       builder: (context) {
         return Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: double.infinity,
-                child: Obx(
-                  () => SegmentedButton<ExtensionType?>(
-                    segments: [
-                      ButtonSegment(
-                        value: null,
-                        label: Text('common.show-all'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: ExtensionType.bangumi,
-                        label: Text('extension-type.video'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: ExtensionType.manga,
-                        label: Text('extension-type.comic'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: ExtensionType.fikushon,
-                        label: Text('extension-type.novel'.i18n),
-                      ),
-                    ],
-                    selected: <ExtensionType?>{c.searchType.value},
-                    onSelectionChanged: (value) {
-                      debugPrint(value.first.toString());
-                      c.searchType.value = value.first;
-                      Get.back();
-                    },
-                    showSelectedIcon: false,
-                  ),
-                ),
-              ),
-            ],
+          child: Obx(
+            () => ExtensionTypeFilter(
+              selectedType: c.searchType.value,
+              onTypeChanged: (type) {
+                c.searchType.value = type;
+              },
+              compact: true,
+            ),
           ),
         );
       },
@@ -198,36 +170,12 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                 ),
               ),
               const Spacer(),
-              // 选择框
+              // 筛选按钮
               Obx(
-                () => fluent.ComboBox<String>(
-                  items: [
-                    fluent.ComboBoxItem(
-                      value: "all",
-                      child: Text('common.show-all'.i18n),
-                    ),
-                    fluent.ComboBoxItem(
-                      value: ExtensionType.bangumi.toString(),
-                      child: Text('extension-type.video'.i18n),
-                    ),
-                    fluent.ComboBoxItem(
-                      value: ExtensionType.manga.toString(),
-                      child: Text('extension-type.comic'.i18n),
-                    ),
-                    fluent.ComboBoxItem(
-                      value: ExtensionType.fikushon.toString(),
-                      child: Text('extension-type.novel'.i18n),
-                    ),
-                  ],
-                  value: c.searchType.value?.toString() ?? "all",
-                  onChanged: (value) {
-                    if (value == "all") {
-                      c.searchType.value = null;
-                      return;
-                    }
-                    c.searchType.value = ExtensionType.values.firstWhere(
-                      (element) => element.toString() == value,
-                    );
+                () => ExtensionTypeFilter(
+                  selectedType: c.searchType.value,
+                  onTypeChanged: (type) {
+                    c.searchType.value = type;
                   },
                 ),
               ),

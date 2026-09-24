@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,29 @@ class ExtensionUtils {
   static Map<String, String> extensionErrorMap = {};
   static final Map<String, List<ExtensionLog>> logs = {};
   static final Map<String, Map<String, ExtensionNetworkLog>> networkLogs = {};
+
+  // 首次扩展扫描是否已完成（ensureInitialized 中逐个初始化运行时可能慢于首帧）
+  static bool isLoaded = false;
+  // 扩展列表发生变化（首次加载完成、目录文件增删改）时的监听者
+  static final List<void Function()> _updateListeners = [];
+
+  static void addExtensionUpdateListener(void Function() listener) {
+    if (!_updateListeners.contains(listener)) {
+      _updateListeners.add(listener);
+    }
+  }
+
+  static void removeExtensionUpdateListener(void Function() listener) {
+    _updateListeners.remove(listener);
+  }
+
+  static void _notifyUpdateListeners() {
+    for (final listener in List<void Function()>.from(_updateListeners)) {
+      try {
+        listener();
+      } catch (_) {}
+    }
+  }
 
   static String get extensionsDir => path.join(
         MiruDirectory.getDirectory,
@@ -46,6 +70,7 @@ class ExtensionUtils {
             break;
         }
         _reloadPage();
+        _notifyUpdateListeners();
       }
     });
   }
@@ -58,7 +83,10 @@ class ExtensionUtils {
       await installByPath(extension.path);
     }
 
+    isLoaded = true;
     _reloadPage();
+    // 通知通过 tag 注册、_reloadPage 无法找到的页面控制器（如首页内容页）
+    _notifyUpdateListeners();
   }
 
   static uninstall(String package) async {
@@ -114,6 +142,205 @@ class ExtensionUtils {
           context: context,
           title: 'extension-install-error'.i18n,
           content: Text(e.toString()),
+          actions: [
+            PlatformButton(
+              child: Text('common.close'.i18n),
+              onPressed: () {
+                RouterUtils.pop();
+              },
+            )
+          ],
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// 从 JSON 聚合文件批量安装插件
+  ///
+  /// JSON 格式为插件数组，每个插件包含 name、package、type、url 等字段。
+  /// url 字段为相对于 JSON 文件的路径。
+  static Future<int> installByJson(
+    String jsonPath,
+    BuildContext context,
+  ) async {
+    try {
+      final jsonFile = File(jsonPath);
+      final jsonDir = path.dirname(jsonPath);
+      final jsonContent =
+          (await jsonFile.readAsString()).replaceFirst('\uFEFF', '');
+
+      dynamic parsed;
+      try {
+        parsed = jsonDecode(jsonContent);
+      } catch (e) {
+        throw FormatException('Invalid JSON format: $e');
+      }
+
+      final items = parsed is List
+          ? parsed
+          : parsed is Map && parsed['extensions'] is List
+              ? parsed['extensions'] as List
+              : null;
+      if (items == null) {
+        throw const FormatException(
+          'JSON must be an array or an object containing an extensions array',
+        );
+      }
+
+      int installed = 0;
+      for (final item in items) {
+        if (item is! Map) continue;
+
+        final url = item['url'] as String?;
+        if (url == null || url.isEmpty) continue;
+
+        // 同时兼容两种 JSON 路径格式：
+        // 1. 相对于 JSON 文件：js/video/cycani.js
+        // 2. 相对于项目根目录：repo/js/video/cycani.js
+        final candidates = <String>[
+          path.isAbsolute(url) ? url : path.join(jsonDir, url),
+          if (!path.isAbsolute(url)) path.join(Directory.current.path, url),
+          if (!path.isAbsolute(url)) path.join(path.dirname(jsonDir), url),
+        ];
+        final jsPath = candidates.firstWhere(
+          (candidate) => File(candidate).existsSync(),
+          orElse: () => '',
+        );
+
+        if (jsPath.isEmpty) {
+          debugPrint('Plugin file not found. Tried: ${candidates.join(', ')}');
+          continue;
+        }
+
+        try {
+          final script = await File(jsPath).readAsString();
+          final ext = ExtensionUtils.parseExtension(script);
+
+          // JSON 索引中的文件名可以与 package 不同，例如 cycani.js 对应 org.cycani。
+          // package 是插件的唯一标识，保存时统一使用解析出的 package。
+
+          // 保存文件
+          final savePath = path.join(extensionsDir, '${ext.package}.js');
+          File(savePath).writeAsStringSync(script);
+
+          // 初始化运行时
+          if (!runtimes.containsKey(ext.package)) {
+            runtimes[ext.package] = await ExtensionService().initRuntime(ext);
+          }
+
+          installed++;
+          debugPrint('Installed plugin: ${ext.package} from $jsPath');
+        } catch (e) {
+          debugPrint('Failed to install plugin from $jsPath: $e');
+        }
+      }
+
+      if (installed > 0) {
+        _reloadPage();
+      }
+
+      return installed;
+    } catch (e) {
+      if (context.mounted) {
+        showPlatformDialog(
+          context: context,
+          title: 'extension-install-error'.i18n,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Failed to import plugins from JSON'),
+              const SizedBox(height: 8),
+              Text(
+                e.toString(),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            PlatformButton(
+              child: Text('common.close'.i18n),
+              onPressed: () {
+                RouterUtils.pop();
+              },
+            )
+          ],
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// 从目录批量安装插件（递归扫描 .js 文件）
+  static Future<int> installByDirectory(
+    String dirPath,
+    BuildContext context,
+  ) async {
+    try {
+      final dir = Directory(dirPath);
+      if (!dir.existsSync()) {
+        throw Exception('Directory does not exist: $dirPath');
+      }
+
+      int installed = 0;
+
+      // 递归查找所有 .js 文件
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is File && path.extension(entity.path) == '.js') {
+          try {
+            final jsPath = entity.path;
+            final script = await File(jsPath).readAsString();
+            final ext = ExtensionUtils.parseExtension(script);
+
+            // 检查文件名与包名是否一致
+            final jsFileName = path.basenameWithoutExtension(jsPath);
+            if (jsFileName != ext.package) {
+              debugPrint(
+                'File name mismatch: expected ${ext.package}, got $jsFileName',
+              );
+              continue;
+            }
+
+            // 保存文件
+            final savePath = path.join(extensionsDir, '${ext.package}.js');
+            File(savePath).writeAsStringSync(script);
+
+            // 初始化运行时
+            if (!runtimes.containsKey(ext.package)) {
+              runtimes[ext.package] = await ExtensionService().initRuntime(ext);
+            }
+
+            installed++;
+            debugPrint('Installed plugin: ${ext.package} from $jsPath');
+          } catch (e) {
+            debugPrint('Failed to install plugin from ${entity.path}: $e');
+          }
+        }
+      }
+
+      if (installed > 0) {
+        _reloadPage();
+      }
+
+      return installed;
+    } catch (e) {
+      if (context.mounted) {
+        showPlatformDialog(
+          context: context,
+          title: 'extension-install-error'.i18n,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Failed to import plugins from directory'),
+              const SizedBox(height: 8),
+              Text(
+                e.toString(),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
           actions: [
             PlatformButton(
               child: Text('common.close'.i18n),

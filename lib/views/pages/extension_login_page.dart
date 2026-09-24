@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:miru_app/data/services/extension_service.dart';
 import 'package:miru_app/models/extension.dart';
 import 'package:miru_app/utils/extension.dart';
@@ -16,7 +20,10 @@ class ExtensionLoginPage extends StatefulWidget {
 class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
   late final Future<Map<String, dynamic>> _config =
       widget.runtime.loginConfig();
+  late final Future<List<Map<String, dynamic>>> _form =
+      widget.runtime.loginForm();
   final Map<String, TextEditingController> _values = {};
+  final _formKey = GlobalKey<FormState>();
   bool _busy = false;
   String? _message;
 
@@ -56,6 +63,8 @@ class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
   }
 
   Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _busy = true;
       _message = null;
@@ -64,7 +73,13 @@ class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
       final success = await widget.runtime.submitLogin(_formValues);
       if (success) {
         await widget.runtime.setCookie(await widget.runtime.listCookie());
-        if (mounted) setState(() => _message = '登录成功');
+        if (mounted) {
+          if (Platform.isAndroid) {
+            Get.back();
+          } else {
+            context.go('/settings');
+          }
+        }
       } else if (mounted) {
         setState(() => _message = '登录失败，请检查输入内容');
       }
@@ -88,62 +103,72 @@ class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            shrinkWrap: true,
-            children: [
-              for (final field in fields)
-                if (field['key'] is String &&
-                    _values.containsKey(field['key'])) ...[
-                  if (field['type'] == 'captcha' && field['imageUrl'] is String)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Image.network(field['imageUrl'] as String),
-                    ),
-                  TextField(
-                    controller: _values[field['key'] as String],
-                    obscureText: field['type'] == 'password',
-                    keyboardType: field['type'] == 'email'
-                        ? TextInputType.emailAddress
-                        : field['type'] == 'phone'
-                            ? TextInputType.phone
-                            : TextInputType.text,
-                    decoration: InputDecoration(
-                      labelText:
-                          field['label'] as String? ?? field['key'] as String,
-                      hintText: field['placeholder'] as String?,
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                  if (field['verification'] == true) ...[
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _requestCode(field['key'] as String),
-                        child: const Text('获取验证码'),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              shrinkWrap: true,
+              children: [
+                for (final field in fields)
+                  if (field['key'] is String &&
+                      _values.containsKey(field['key'])) ...[
+                    if (field['type'] == 'captcha' &&
+                        field['imageUrl'] is String)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Image.network(field['imageUrl'] as String),
+                      ),
+                    TextFormField(
+                      controller: _values[field['key'] as String],
+                      obscureText: field['type'] == 'password',
+                      keyboardType: field['type'] == 'email'
+                          ? TextInputType.emailAddress
+                          : field['type'] == 'phone'
+                              ? TextInputType.phone
+                              : TextInputType.text,
+                      validator: (value) {
+                        if ((value ?? '').trim().isEmpty) {
+                          return '请输入${field['label'] as String? ?? field['key'] as String}';
+                        }
+                        return null;
+                      },
+                      decoration: InputDecoration(
+                        labelText:
+                            field['label'] as String? ?? field['key'] as String,
+                        hintText: field['placeholder'] as String?,
+                        border: const OutlineInputBorder(),
                       ),
                     ),
+                    if (field['verification'] == true) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _requestCode(field['key'] as String),
+                          child: const Text('获取验证码'),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
                   ],
-                  const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _busy ? null : _submit,
+                  child: _busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('登录'),
+                ),
+                if (_message != null) ...[
+                  const SizedBox(height: 12),
+                  SelectableText(_message!),
                 ],
-              FilledButton(
-                onPressed: _busy ? null : _submit,
-                child: _busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('登录'),
-              ),
-              if (_message != null) ...[
-                const SizedBox(height: 12),
-                SelectableText(_message!),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -163,26 +188,30 @@ class _ExtensionLoginPageState extends State<ExtensionLoginPage> {
             );
           }
           final config = configSnapshot.data!;
-          if (config['mode'] == 'form') {
-            return FutureBuilder<List<Map<String, dynamic>>>(
-              future: widget.runtime.loginForm(),
-              builder: (context, formSnapshot) {
-                if (formSnapshot.hasError) {
-                  return _errorPage(formSnapshot.error!);
-                }
-                if (!formSnapshot.hasData) {
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                return _formPage(formSnapshot.data!);
-              },
-            );
-          }
-          return WebViewPage(
-            key: ValueKey(config['url']),
-            extensionRuntime: widget.runtime,
-            url: config['url'] as String,
+          return FutureBuilder<List<Map<String, dynamic>>>(
+            future: _form,
+            builder: (context, formSnapshot) {
+              if (formSnapshot.hasError) {
+                return _errorPage(formSnapshot.error!);
+              }
+              if (!formSnapshot.hasData) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final fields = formSnapshot.data!;
+              if (config['mode'] == 'form' || fields.isNotEmpty) {
+                return _formPage(fields);
+              }
+              if (widget.runtime.extension.package == 'org.cycani') {
+                return _errorPage('当前插件未提供登录输入框配置。');
+              }
+              return WebViewPage(
+                key: ValueKey(config['url']),
+                extensionRuntime: widget.runtime,
+                url: config['url'] as String,
+              );
+            },
           );
         },
       );

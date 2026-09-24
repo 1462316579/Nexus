@@ -25,6 +25,24 @@ export default class Cycani extends Extension {
       description: '由登录流程保存，用于访问需要登录的视频源。',
       options: [],
     });
+    await this.registerSetting({
+      key: 'authUser',
+      title: '登录用户',
+      type: 'input',
+      value: '',
+      defaultValue: '',
+      description: '当前登录账号信息。',
+      options: [],
+    });
+    await this.registerSetting({
+      key: 'authExpiresAt',
+      title: '登录有效期',
+      type: 'input',
+      value: '',
+      defaultValue: '',
+      description: '认证令牌的过期时间。',
+      options: [],
+    });
   }
 
   async api(path, query = {}) {
@@ -202,9 +220,13 @@ export default class Cycani extends Extension {
     }
     const token = await this.getSetting('authToken');
     if (!token) throw new Error('请先在设置中登录次元城动画，再播放视频。');
+    const expiresAt = await this.getSetting('authExpiresAt');
+    if (expiresAt && Number(expiresAt) > 0 && Date.now() >= Number(expiresAt)) {
+      throw new Error('登录已过期，请前往设置重新登录次元城动画。');
+    }
     let response;
     try {
-      response = await this.request(`/api/v2/sections/${encodeURIComponent(sectionId)}/play-url?expected_session_scope=video`, {
+      response = await this.request(`/api/v2/sections/${encodeURIComponent(sectionId)}/play-url`, {
         headers: {
           'X-App-Name': 'cyc_web',
           'X-App-Version': 'cycweb',
@@ -215,13 +237,21 @@ export default class Cycani extends Extension {
         },
       });
     } catch (error) {
-      if (String(error).includes('401')) {
-        throw new Error('登录已失效，请重新登录次元城动画。');
+      const msg = String(error);
+      if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
+        // 注意：不要在这里自动清 authToken — 401 可能是请求本身的问题
+        // （如 sectionId 不存在、playerCode 错误等），不一定是 token 失效。
+        throw new Error('登录校验未通过，请前往设置重新登录次元城动画。');
       }
       throw error;
     }
     const data = typeof response === 'string' ? JSON.parse(response) : response;
     if (data?.code !== 0 || !data?.data?.url) {
+      const msg = (data?.msg || '').toLowerCase();
+      if (msg.includes('unauthorized') || msg.includes('登录') || msg.includes('token') || msg.includes('鉴权')) {
+        // 同样不要自动清 token — 只提示用户重新登录。
+        throw new Error(`登录状态异常（${data?.msg || '未授权'}），请前往设置重新登录次元城动画。`);
+      }
       throw new Error(data?.msg || '请先登录次元城动画后再播放。');
     }
     const playUrl = data.data.url;
@@ -236,6 +266,73 @@ export default class Cycani extends Extension {
     return true;
   }
 
+  // 轻量鉴权验证：用 Bearer token 调 /api/user/me
+  // 返回值：
+  //   'valid'   — 服务端明确接受 token
+  //   'invalid' — 服务端明确拒绝（401、code 非 0、msg 含 unauthorized/login/token/鉴权）
+  //   'unknown' — 网络错误 / 超时 / 无法连接，无法判断有效性
+  async _validateToken(token) {
+    if (!token) return 'invalid';
+    try {
+      const response = await this.request('/api/user/me', {
+        headers: {
+          'X-App-Name': 'cyc_web',
+          'X-App-Version': 'cycweb',
+          'X-Time-Zone': 'Asia/Shanghai',
+          Referer: `${BASE_URL}/`,
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = typeof response === 'string' ? JSON.parse(response) : response;
+      if (data?.code === 0 || data?.code === 200) return 'valid';
+      const msg = (data?.msg || '').toLowerCase();
+      if (msg.includes('unauthorized') || msg.includes('登录') || msg.includes('token') || msg.includes('鉴权')) {
+        return 'invalid';
+      }
+      // 其他 code 非 0 的情况（比如限流 429、服务端 500），不明确是鉴权失败，保守返回 unknown
+      return 'unknown';
+    } catch (error) {
+      // 区分 HTTP 401（服务端明确拒绝）和其他网络错误
+      const msg = String(error).toLowerCase();
+      if (msg.includes('401') || msg.includes('unauthorized')) {
+        return 'invalid';
+      }
+      return 'unknown';
+    }
+  }
+
+  // 主动清除本地登录凭证（服务端判定 token 失效时调用）
+  async _clearAuth() {
+    try {
+      await this.setSetting('authToken', '');
+      await this.setSetting('authUser', '');
+      await this.setSetting('authExpiresAt', '');
+    } catch (_) {}
+  }
+
+  async getLoginStatus() {
+    const token = await this.getSetting('authToken');
+    
+    if (!token) {
+      return { loggedIn: false };
+    }
+    const expiresAt = await this.getSetting('authExpiresAt');
+    if (expiresAt && Number(expiresAt) > 0 && Date.now() >= Number(expiresAt)) {
+      // 过期了：保留 token 不清，让用户下次登录成功时覆盖
+      return { loggedIn: false };
+    }
+    // 只信任本地存储的 token 和有效期 — 不在此做网络验证。
+    // 网络请求容易因超时/限流导致误判为 invalid，进而主动清 token，
+    // 造成"刚登录完又显示未登录"的体验问题。
+    // token 有效性由播放时的 401 来兜底提示用户重新登录。
+    const user = await this.getSetting('authUser');
+    return {
+      loggedIn: true,
+      user: user || '',
+    };
+  }
+
   login() {
     return { mode: 'form' };
   }
@@ -248,35 +345,66 @@ export default class Cycani extends Extension {
   }
 
   async submitLogin(values) {
-    const response = await this.request('/auth/login', {
-      method: 'post',
-      data: {
-        username: values.username?.trim() || '',
-        password: values.password || '',
-      },
-      headers: {
-        'X-App-Name': 'cyc_web',
-        'X-App-Version': 'cycweb',
-        'X-Time-Zone': 'Asia/Shanghai',
-        Referer: `${BASE_URL}/login`,
-        Accept: 'application/json',
-      },
-    });
-    const data = typeof response === 'string' ? JSON.parse(response) : response;
-    const payload = data?.data ?? data;
-    if (data?.code !== 0 || !payload?.token) {
-      throw new Error(data?.msg || '登录失败，请检查账号和密码。');
+    const username = values?.username?.trim() || '';
+    const password = values?.password || '';
+    if (!username || !password) {
+      throw new Error('请输入账号和密码。');
     }
-    await this.registerSetting({
-      key: 'authToken',
-      title: '登录令牌',
-      type: 'input',
-      value: '',
-      defaultValue: '',
-      description: '由登录流程保存，用于访问需要登录的视频源。',
-      options: [],
-    });
-    await this.setSetting('authToken', payload.token);
+
+    let response;
+    try {
+      response = await this.request('/api/auth/login', {
+        method: 'post',
+        data: { username, password },
+        headers: {
+          'X-App-Name': 'cyc_web',
+          'X-App-Version': 'cycweb',
+          'X-Time-Zone': 'Asia/Shanghai',
+          Referer: `${BASE_URL}/login`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (_) {
+      throw new Error('登录请求失败，请检查网络连接后重试。');
+    }
+
+    let data;
+    try {
+      data = typeof response === 'string' ? JSON.parse(response) : response;
+    } catch (_) {
+      throw new Error('登录服务器返回了无效响应，请稍后重试。');
+    }
+    const payload = data?.data ?? data;
+    if (!payload?.token) {
+      throw new Error(data?.msg || payload?.message || '账号或密码错误，请重试。');
+    }
+    // load() 里已经 registerSetting 过了，这里只需要 setSetting 写入值。
+    // 用 try-catch 包裹防止单次写入失败（如网络或数据库瞬断）导致整体失败。
+    try {
+      await this.setSetting('authToken', payload.token);
+    } catch (e) {
+      throw new Error(`登录凭证保存失败：${String(e)}`);
+    }
+    try {
+      await this.setSetting(
+        'authUser',
+        payload.user?.username || payload.user?.nickname || username,
+      );
+    } catch (e) {
+      console.log('[cycani] set authUser failed:', String(e));
+    }
+    if (payload.expires_at) {
+      const expiresAt = Number(payload.expires_at);
+      try {
+        await this.setSetting(
+          'authExpiresAt',
+          String(expiresAt < 100000000000 ? expiresAt * 1000 : expiresAt),
+        );
+      } catch (e) {
+        console.log('[cycani] set authExpiresAt failed:', String(e));
+      }
+    }
     return true;
   }
 

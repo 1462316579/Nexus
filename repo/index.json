@@ -1,15 +1,80 @@
 [
- {
-  "author": "hualiong",
-  "icon": "https://yzzy.tv/favicon.ico",
-  "lang": "zh-cn",
-  "license": "MIT",
-  "name": "优质资源库",
-  "nsfw": "false",
-  "package": "yzzy.tv",
-  "type": "bangumi",
-  "url": "yzzy.tv.js",
-  "version": "v0.0.2",
-  "webSite": "https://yzzy.tv"
- }
+  {
+    "name": "包子漫画",
+    "version": "v0.0.1",
+    "author": "Miru User",
+    "lang": "zh-cn",
+    "license": "MIT",
+    "package": "org.bzmgcn.comic",
+    "type": "manga",
+    "webSite": "https://cn.bzmgcn.com",
+    "icon": "https://cn.bzmgcn.com/favicon.ico",
+    "description": "包子漫画搜索、分类与阅读",
+    "url": "repo/js/comic/bzmgcn.js"
+  },
+  {
+    "name": "新笔趣阁",
+    "version": "v0.0.1",
+    "author": "Miru User",
+    "lang": "zh-cn",
+    "license": "MIT",
+    "package": "org.xinbiqug.novel",
+    "type": "fikushon",
+    "webSite": "https://www.xinbiqug.com",
+    "icon": "https://www.xinbiqug.com/favicon.ico",
+    "description": "新笔趣阁小说搜索、分类与阅读",
+    "url": "repo/js/novel/xinbiqug.js"
+  },
+  {
+    "name": "次元城动画",
+    "version": "v0.0.1",
+    "author": "Miru User",
+    "lang": "zh-cn",
+    "license": "MIT",
+    "package": "org.cycani",
+    "type": "bangumi",
+    "webSite": "https://www.cycani.org",
+    "icon": "https://www.cycani.org/brand/bangumi-favicon.ico",
+    "description": "次元城动画分类、筛选与登录播放",
+    "url": "repo/js/video/cycani.js"
+  },
+  {
+    "name": "多多影视",
+    "version": "v0.0.2",
+    "author": "Miru User",
+    "lang": "zh-cn",
+    "license": "MIT",
+    "package": "org.duoduo.tv",
+    "type": "bangumi",
+    "webSite": "https://3.23433ssdfd.top",
+    "icon": "https://3.23433ssdfd.top/favicon.ico",
+    "description": "多多影视分类、搜索与播放",
+    "url": "repo/js/video/duoduo.js"
+  },
+  {
+    "name": "5sing原创音乐",
+    "version": "v0.0.1",
+    "author": "Miru User",
+    "lang": "zh-cn",
+    "license": "MIT",
+    "package": "org.5sing.kugou",
+    "type": "music",
+    "webSite": "https://5sing.kugou.com",
+    "icon": "https://5sing.kugou.com/favicon.ico",
+    "description": "5sing原创音乐搜索、分类与播放",
+    "url": "repo/js/music/5sing.js"
+  },
+  {
+    "name": "天天看小说",
+    "version": "v0.0.1",
+    "author": "Miru User",
+    "lang": "zh-cn",
+    "license": "MIT",
+    "package": "org.ttkan.novel",
+    "type": "fikushon",
+    "webSite": "https://cn.ttkan.co",
+    "icon": "https://cn.ttkan.co/favicon.ico",
+    "description": "天天看小说搜索、分类与阅读",
+    "url": "repo/js/novel/ttkan.js"
+  }
 ]

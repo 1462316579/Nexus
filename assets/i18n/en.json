@@ -255,7 +255,8 @@
   "extension-type": {
     "video": "Video",
     "novel": "Novel",
-    "comic": "Comic"
+    "comic": "Comic",
+    "music": "Music"
   },
   "extension-info": {
     "author": "Author",
